@@ -1,5 +1,20 @@
 # AGENTS.md
 
+## Project Ownership and Git Workflow
+
+This is Elyorjon Mannonov's personal `elyorman/quant-platform` project. It is
+independent of any employer or company workflow: no issue-tracker tickets,
+ticket IDs or ticket-prefixed branch/commit names are required, and no
+employer name, work account, work email or work tooling may appear in code,
+docs, commit metadata or configuration. Use the personal git identity
+configured for this repository. Do not block authorized work, commits or
+pushes to request a ticket. Use concise descriptive commit messages. These
+repository-specific instructions override generic workflow preferences from
+other contexts.
+
+Create branches, commit, push or open pull requests only when the user requests
+those actions. Never include credentials or generated vendor research data.
+
 ## Purpose
 
 This repository builds a commercial, local-first quantitative trading research application for U.S. equities and ETFs. V1 is a paid product, not a prototype, demo, notebook, or proof of concept.

@@ -1,7 +1,8 @@
 # Repository handoff — 2026-10-07
 
-This checkpoint preserves the work for Elyorjon Mannonov when
-continuing from another account. The repository is
+This checkpoint preserves Elyorjon Mannonov's personal project when continuing
+from another account. No issue-tracker tickets or ticket-prefixed commit
+messages are required; this repository is independent of any employer. The repository is
 `https://github.com/elyorman/quant-platform`; the existing machine's origin uses
 the `github-elyorman` SSH alias. Account access and SSH configuration are local
 setup, not part of the quant runtime. No new research implementation is part of
