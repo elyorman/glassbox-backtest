@@ -1,0 +1,11 @@
+{
+  "initial_cash": "10000",
+  "approved_quantity": "10",
+  "planned_loss": "100",
+  "stop_trigger": "90",
+  "stop_gap_fill": "50",
+  "realized_pnl": "-500",
+  "final_equity": "9500",
+  "maximum_close_drawdown": "0.05",
+  "blocked_reentry_reason": "drawdown_halt"
+}

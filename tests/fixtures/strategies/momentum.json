@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "configuration": {
+    "name": "synthetic_momentum_engineering_fixture",
+    "family": "momentum",
+    "universe": ["SYNTH-A", "SYNTH-B"],
+    "momentum_lookback": 2,
+    "momentum_skip": 0,
+    "top_k": 1,
+    "invested_fraction": "0.50",
+    "volume_lookback": 1,
+    "max_volume_participation": "1",
+    "purpose": "engineering_fixture"
+  }
+}

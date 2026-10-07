@@ -1,0 +1,11 @@
+{
+  "initial_cash": "1000",
+  "signal_session": "2024-01-31",
+  "execution_session": "2024-02-01",
+  "selected_security": "SYNTH-A",
+  "selected_score": "0.20",
+  "quantity": "4",
+  "execution_price": "125",
+  "final_cash": "500",
+  "final_equity": "1020"
+}

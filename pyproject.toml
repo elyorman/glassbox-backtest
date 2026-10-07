@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quant-platform-core"
+version = "0.5.1"
+description = "Local daily portfolio research engine"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+parquet = ["pyarrow>=18,<24"]
+
+[project.scripts]
+quant-data = "quant_core.cli:main"
+quant-backtest = "quant_core.backtest.cli:main"
+quant-strategies = "quant_core.strategies.cli:main"
+quant-validate = "quant_core.validation.cli:main"
+quant-universe = "quant_core.universes.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["python"]

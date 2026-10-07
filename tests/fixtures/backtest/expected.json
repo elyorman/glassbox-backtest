@@ -1,0 +1,19 @@
+{
+  "capital": "1000",
+  "slippage_bps": "0",
+  "fee_bps": "0",
+  "daily": [
+    {"session": "2024-01-02", "cash": "1000", "receivables": "0", "market_value": "0", "equity": "1000"},
+    {"session": "2024-01-03", "cash": "500", "receivables": "0", "market_value": "500", "equity": "1000"},
+    {"session": "2024-01-04", "cash": "598", "receivables": "8", "market_value": "394", "equity": "1000"}
+  ],
+  "fills": [
+    {"security_id": "SYNTH-A", "side": "buy", "quantity": "8", "price": "50"},
+    {"security_id": "SYNTH-B", "side": "buy", "quantity": "5", "price": "20"},
+    {"security_id": "SYNTH-A", "side": "sell", "quantity": "2", "price": "49"}
+  ],
+  "final_realized_pnl": "-2",
+  "final_unrealized_pnl": "-6",
+  "dividend_income": "8",
+  "expired_orders": 1
+}

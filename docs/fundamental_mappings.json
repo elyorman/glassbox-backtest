@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-10-04",
+  "measure": "SEC-as-reported annual gross profit divided by consolidated assets; adaptation, not Compustat replication",
+  "minimum_eligible": 10,
+  "profiles": {
+    "AAPL": {"status": "direct", "rules": []},
+    "MSFT": {"status": "direct", "rules": []},
+    "CSCO": {"status": "direct", "rules": []},
+    "HD": {"status": "direct", "rules": []},
+    "JNJ": {"status": "direct", "rules": [], "reason": "FY2020 ends 2021-01-03; June2021 remains outside the prior-calendar-year rule"},
+    "KO": {"status": "direct", "rules": []},
+    "NVDA": {"status": "direct", "rules": []},
+    "PEP": {"status": "direct", "rules": []},
+    "PG": {
+      "status": "reviewed_derivation",
+      "reason": "Reported production cost includes manufacturing, distribution, warehousing and shipping; preserve as-filed pension reclassification vintages",
+      "rules": [
+        {"from": "2016-01-01", "through": "2018-12-31", "revenue": ["us-gaap", "SalesRevenueNet"], "cost": ["us-gaap", "CostOfGoodsSold"]},
+        {"from": "2019-01-01", "through": "2025-12-31", "revenue": ["us-gaap", "Revenues"], "cost": ["us-gaap", "CostOfGoodsAndServicesSold"]}
+      ],
+      "sources": [
+        "https://www.sec.gov/Archives/edgar/data/80424/000008042416000212/fy151610-kreport.htm",
+        "https://www.sec.gov/Archives/edgar/data/80424/000008042425000076/pg-20250630.htm",
+        "https://www.sec.gov/Archives/edgar/data/80424/000008042419000050/fy181910-kreport.htm"
+      ]
+    },
+    "COST": {
+      "status": "reviewed_derivation",
+      "reason": "Issuer-reported gross margin adaptation: net sales less merchandise costs, excluding membership. Distribution/fulfillment/manufacturing and selected depreciation included, but warehouse staff and substantially all building/equipment depreciation in SG&A; not Compustat comparability. 2018 onward direct GP only: net-sales/membership observations use product/member dimensions, excluded by this whole-entity reader; no reviewed dimension-to-total derivation. Nonfinancial FY2016 amendment lacks a structured instance and remains blocked by bounded review support.",
+      "rules": [
+        {"from": "2016-01-01", "through": "2017-12-31", "revenue": ["us-gaap", "SalesRevenueNet"], "cost": ["us-gaap", "CostOfGoodsSold"]},
+        {"from": "2018-01-01", "through": "2025-12-31", "gross_profit": ["us-gaap", "GrossProfit"]}
+      ],
+      "sources": [
+        "https://www.sec.gov/Archives/edgar/data/909832/000090983216000032/cost10k82816.htm",
+        "https://www.sec.gov/Archives/edgar/data/909832/000090983216000034/cost10ka82816.htm",
+        "https://www.sec.gov/Archives/edgar/data/909832/000090983218000013/cost10k9218.htm",
+        "https://www.sec.gov/Archives/edgar/data/909832/000090983225000101/cost-20250831.htm"
+      ]
+    },
+    "AMZN": {"status": "blocked", "reason": "Tagged cost of sales excludes fulfillment and important AWS infrastructure costs; no invented allocation", "rules": [], "sources": ["https://www.sec.gov/Archives/edgar/data/1018724/000101872417000011/amzn-20161231x10k.htm", "https://www.sec.gov/Archives/edgar/data/1018724/000101872426000004/amzn-20251231.htm"]},
+    "WMT": {"status": "blocked", "reason": "Total revenues includes membership/other income; distribution warehousing and occupancy in SG&A limit whole-company complete-cost comparability", "rules": [], "sources": ["https://stock.walmart.com/sec-filings/all-sec-filings/content/0000104169-16-000079/wmtars-1312016.htm", "https://www.sec.gov/Archives/edgar/data/104169/000010416925000021/wmt-20250131.htm"]},
+    "CAT": {"status": "blocked", "reason": "Industrial cost of sales cannot match consolidated financial-plus-industrial revenue/assets; generic cost tags also include minor expense items", "rules": [], "sources": ["https://www.sec.gov/Archives/edgar/data/18230/000001823017000041/cat10k2016a01.pdf"]},
+    "CVX": {"status": "blocked", "reason": "Whole-company revenue/production-cost mapping not qualified", "rules": []},
+    "XOM": {"status": "blocked", "reason": "Whole-company revenue/production-cost mapping not qualified", "rules": []},
+    "UNP": {"status": "blocked", "reason": "No reviewed annual gross-profit mapping; operating income is not a substitute", "rules": []},
+    "MCD": {"status": "blocked", "reason": "Franchise/company-operated scopes require separate accounting review", "rules": []},
+    "GOOGL": {"status": "blocked", "reason": "Outside common strategy panel; multi-class market equity unresolved", "rules": []},
+    "UPS": {"status": "blocked", "reason": "Outside common strategy panel; multi-class market equity unresolved", "rules": []}
+  },
+  "preferred_policy": "Redemption, then liquidation, then par; exact annual issuer/date scope. Missing tags never imply zero.",
+  "share_policy": "Exact December31 issuer outstanding shares, GAAP or explicitly dated DEI; original components alone do not qualify split/class basis. No nearest-quarter substitution."
+}

@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "name": "synthetic_gap_and_halt_engineering_fixture",
+  "version": "1",
+  "orders": [
+    {
+      "kind": "entry",
+      "signal_date": "2024-01-02",
+      "security_id": "SYNTH-RISK",
+      "method": "fixed_fractional",
+      "risk_fraction": "0.01",
+      "stop_price": "90",
+      "reason": "engineering_loss_budget"
+    },
+    {
+      "kind": "entry",
+      "signal_date": "2024-01-04",
+      "security_id": "SYNTH-RISK",
+      "method": "fixed_fractional",
+      "risk_fraction": "0.01",
+      "stop_price": "45",
+      "reason": "engineering_reentry_must_be_blocked"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "max_trade_risk": "0.01",
+    "max_position_fraction": "0.25",
+    "max_gross_fraction": "0.80",
+    "cash_reserve_fraction": "0.20",
+    "max_portfolio_heat": "0.03",
+    "volume_lookback": 1,
+    "drawdown_reduce": "0.025",
+    "drawdown_halt": "0.04"
+  }
+}

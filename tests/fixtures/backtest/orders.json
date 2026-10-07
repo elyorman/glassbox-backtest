@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "hand_calculated_split_dividend_portfolio",
+  "version": "1",
+  "orders": [
+    {"signal_date": "2024-01-02", "security_id": "SYNTH-A", "side": "buy", "quantity": "4", "reason": "initial_A"},
+    {"signal_date": "2024-01-02", "security_id": "SYNTH-B", "side": "buy", "quantity": "5", "reason": "initial_B"},
+    {"signal_date": "2024-01-03", "security_id": "SYNTH-A", "side": "sell", "quantity": "2", "reason": "partial_exit"},
+    {"signal_date": "2024-01-04", "security_id": "SYNTH-B", "side": "buy", "quantity": "1", "reason": "end_boundary"}
+  ]
+}
