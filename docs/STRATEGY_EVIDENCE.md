@@ -56,9 +56,10 @@ point-in-time data and remain research candidates until then.
 | Equity sector rotation, always invested | US sector rotation by 12-1 momentum | Jegadeesh and Titman 1993; Moskowitz and Grinblatt 1999 |
 | Diversified defensive allocation | Inverse-volatility / risk-parity allocation | Maillard, Roncalli and Teïletche 2010; Asness, Frazzini and Pedersen 2012 |
 
-The sector-rotation and trend candidates overlap with configurations already
-inspected on ETF-9 (see [the research ledger](RESEARCH_LEDGER.md)); their
-registrations must cite those rows under rule 2.
+Candidates overlap with configurations already inspected, including
+momentum and trend recipes on ETF-9 and low-volatility stock recipes (see
+[the research ledger](RESEARCH_LEDGER.md)); every registration cites its
+related rows under rule 2.
 
 ## 2. Evidence pack
 
@@ -122,6 +123,8 @@ set together with a provider dataset.
   never used for selection.
 - Evaluating an unchanged registered configuration on later data (a forward
   journal or an extension of the same instruments and provider) does not count.
+  The pack keeps the registered panel's results; extension results are added
+  alongside them, never in place of them.
 - Reruns that reproduce an earlier result (engine replays) do not count.
 - Whenever classification is ambiguous, record the larger defensible number
   and say why in the ledger.
@@ -136,10 +139,12 @@ Deflated Sharpe inputs, stated in every pack and computed per parent:
     registration (at least three: the parent and its declared neighbours;
     rebalance-shift copies excluded), at 10 bps, under this document's cash and
     reference-rate convention;
-  - the historical floor: across all ledger trials with a recorded
-    10 bps continuous-period Sharpe, as originally reported. It is computed
-    once from the sealed evidence and recorded in the ledger header before the
-    first registration under this standard, and is not recomputed afterwards.
+  - the historical floor: one Sharpe per counted ledger trial, taken from the
+    study row that counted it: its zero-reference `sharpe` metric for the
+    10 bps continuous period, divided by √252 to give a daily value. It is
+    computed once from the sealed evidence, with the script and the list of
+    trials committed, and recorded in the ledger header before the first
+    registration under this standard. It is not recomputed afterwards.
 - **T, skewness, kurtosis:** the number of daily returns in the primary
   period and the sample skewness and kurtosis of the strategy's daily excess
   returns.
