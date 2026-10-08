@@ -82,7 +82,7 @@ sell-before-entry behavior. The full suite passes 604 tests.
 
 Local evidence: `local/volume-2026-10-06/` retains the original attempt;
 `local/volume-2026-10-06-finalized/` contains the recovered registration/results.
-The [local report](../local/volume-2026-10-06-finalized/REPORT.html) provides panel
+The local report (`local/volume-2026-10-06-finalized/REPORT.html`) provides panel
 filters, all 108 scenario entries, direction comparisons, score diagnostics,
 uncertainty intervals and overlap with momentum/high-anchor. CSV/JSON exports
 and a completion seal retain exact figures and provenance. The report's links
