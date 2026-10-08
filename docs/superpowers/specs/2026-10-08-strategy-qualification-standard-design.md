@@ -1,7 +1,7 @@
 # Strategy qualification standard — design
 
 Date: 2026-10-08. Decision owner: Elyorjon Mannonov.
-Status: approved in discussion; awaiting written-spec review.
+Status: approved 2026-10-08; adopted as [the evidence standard](../../STRATEGY_EVIDENCE.md), which governs where the two differ.
 
 ## Problem
 
