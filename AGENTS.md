@@ -31,11 +31,14 @@ treat profitable backtests, engine tests or an unfinished UI as delivery of the
 complete product promise. Source access and the training pipeline are required
 in V1 Developer/Source; richer Desktop retraining UI is optional.
 
-V1 also requires **3–4 distinct, well-researched, validated built-in strategies**
-(minimum three; target four), as defined in `PROJECT.md` under Reference
-Strategies. Engine tools, parameter/sizing variants, benchmarks or unqualified
-research candidates do not fulfill that release requirement. Preserve the
-evidence standard and continue bounded research if fewer than three qualify.
+V1 also requires **3–4 distinct, well-researched built-in strategies**
+(minimum three; target four) under
+[the built-in strategy evidence standard](docs/STRATEGY_EVIDENCE.md), adopted
+2026-10-08: disclosed evidence packs, no pass/fail return threshold, ETF-based
+V1 candidates, one registration and git tag per study, and
+[the research ledger](docs/RESEARCH_LEDGER.md) for every outcome. Engine
+tools, parameter/sizing variants and benchmarks do not count as strategies.
+Where any other document disagrees with the standard, the standard governs.
 
 ## Core Principles
 
@@ -148,11 +151,12 @@ Rules:
 
 ### Provider Priorities
 
-Current user decision (2026-10-05): continue with existing Alpaca data/account
-for development and exploratory research until promising customer interest.
-Defer paid independent acquisition and further EODHD collection. Preserve the
-frozen evidence and qualification/release gates; do not relabel exploratory
-Alpaca results as independent validation. See `docs/ALPACA_RESEARCH.md`.
+Current user decision (2026-10-08): build and research V1 ETF built-ins on
+the existing Alpaca daily data. Cross-check on an independent provider
+(target: Tiingo business plan) before publishing reference numbers; disclose
+if not done. Paid survivorship-free data is deferred to a later stock-strategy
+stage. Confirming Alpaca's terms for commercial research use is an open
+action item. See `docs/STRATEGY_EVIDENCE.md`, Section 5.
 
 Current plan, subject to hands-on validation and licensing review:
 
@@ -303,12 +307,13 @@ Metrics must have documented formulas and tests.
 
 ## Validation Requirements
 
-The initial rule-strategy campaign API/CLI is documented in `docs/VALIDATION.md`.
-Keep its finite trial budgets, reviewed data capabilities, phase/holdout gates,
-failure history and evidence hashes intact. Do not relabel synthetic engineering
-campaigns as empirical validation or a maximum-mean bootstrap diagnostic as DSR.
-Changing code or methodology after registration requires a new recorded research
-version and a disclosure of previously exposed periods.
+The campaign API/CLI in `docs/VALIDATION.md` remains available as a research
+tool; built-in qualification follows `docs/STRATEGY_EVIDENCE.md` instead of
+its nomination gates. Keep failure history and evidence hashes intact. Do not
+relabel synthetic engineering campaigns as empirical validation or a
+maximum-mean bootstrap diagnostic as DSR. Changing a configuration after
+inspecting results is a new registration with a new git tag that cites the
+prior trial count.
 
 V1 must support serious validation, not just a single historical equity curve:
 
@@ -434,7 +439,7 @@ Custom strategy/features/integrations are separate paid work. OEM/commercial red
 
 - Free/free-tier historical data may be used during initial engine development, model training, exploratory backtesting, and test construction where provider terms permit.
 - Do not present free-development-dataset results as final commercial validation.
-- For promising candidates, freeze the methodology/configuration, obtain a better paid dataset/provider, and re-run the important experiments from scratch. Prefer an independent-provider cross-check before shipping/reference claims.
+- Before publishing reference numbers for a built-in, cross-check on an independent provider where feasible and disclose if not done. Paid survivorship-free data is required before stock-based strategies can become built-ins.
 - Treat cross-provider degradation as a signal to investigate data assumptions, corporate actions, survivorship, timestamps, normalization, or overfitting.
 - Never redistribute third-party market datasets unless the license explicitly permits it; normal customer use remains BYO provider/local data.
 
@@ -508,7 +513,7 @@ Research spikes are allowed when they answer a concrete architectural or product
 
 ## Current implementation and research status
 
-See [audit remediation](docs/AUDIT_REMEDIATION.md) for corrected engine/data behavior and [research status](docs/RESEARCH_STATUS.md) for dated evidence. Keep historical logs out of this instruction file. Preserve frozen sources/results; new code or data requires distinct evidence. EODHD response import, optional Parquet and dated membership are implemented foundations, not empirical provider/strategy qualification.
+See [audit remediation](docs/AUDIT_REMEDIATION.md) for corrected engine/data behavior, [the research ledger](docs/RESEARCH_LEDGER.md) for every study and its trial count, and [research status](docs/RESEARCH_STATUS.md) for dated historical evidence (superseded rules noted at its top). Keep historical logs out of this instruction file. Preserve frozen sources/results; new code or data requires distinct evidence. EODHD response import, optional Parquet and dated membership are implemented foundations, not empirical provider/strategy qualification.
 
 The [action audit and input preflight](docs/DATA_QUALIFICATION.md) retain missing
 cash/payment fields and reviewed event classifications. Preflight templates stay
