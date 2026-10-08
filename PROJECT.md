@@ -41,8 +41,8 @@ to choose the finished product should be:
 - validation-first, with chronological OOS/walk-forward, parameter sensitivity,
   cost stress and regime checks explained in plain language;
 - stock discovery, testing, risk and sizing in one consistent workflow;
-- 3–4 well-researched, validated built-in strategies and validated ML rankings with inspectable
-  inputs, rules, scores and decisions;
+- 3–4 well-researched built-in strategies with disclosed evidence packs, and validated ML
+  rankings, with inspectable inputs, rules, scores and decisions;
 - no-code rule-based strategy creation in Desktop;
 - local-first research and private customer data, without recurring cloud lock-in;
 - no mandatory software subscription; the purchased major version is perpetual;
@@ -122,9 +122,10 @@ calculation/reason for the selected quantity.
 
 ### PR-05 — Strategy Quality
 
-V1 must ship **3–4 distinct, well-researched, validated built-in strategies**
-(minimum three; target four), usable without coding. The qualification and
-delivery contract is specified under **Reference Strategies** below. Research
+V1 must ship **3–4 distinct, well-researched built-in strategies** (minimum
+three; target four), usable without coding. The qualification and delivery
+contract is [the built-in strategy evidence standard](docs/STRATEGY_EVIDENCE.md),
+summarized under **Reference Strategies** below. Research
 tools and user-created strategies do not substitute for this built-in offering.
 
 A profitable historical backtest alone does not establish usefulness. Evaluate
