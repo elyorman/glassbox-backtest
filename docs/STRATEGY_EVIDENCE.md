@@ -33,7 +33,8 @@ All six must hold:
 5. **Distinct role.** Each built-in occupies one of the roles below, and no
    two built-ins share a role. Parameter variants, sizing presets, benchmarks
    and cash controls do not count as separate strategies. Each pack reports
-   daily-return correlation and holdings overlap with every other built-in.
+   daily-return correlation and holdings overlap with every previously
+   registered built-in; the latest pack therefore covers all of them.
 6. **Plain-language limitations page** covering data limitations (history
    length, provider, survivorship where relevant), regimes in which the
    strategy has lost money, and what it does not promise.
@@ -48,12 +49,16 @@ V1 built-ins are ETF-based. Survivor-selected stock panels are never used as
 evidence for a built-in; stock-based strategies require survivorship-free,
 point-in-time data and remain research candidates until then.
 
-| Role | V1 candidate |
-| --- | --- |
-| Cross-asset trend following | Multi-asset time-series trend (Faber 2007; Moskowitz, Ooi and Pedersen 2012) |
-| Tactical equity/bond allocation | Dual momentum: relative and absolute momentum with a bond fallback (Antonacci 2014) |
-| Equity sector rotation, always invested | US sector rotation by 12-1 momentum (Jegadeesh and Titman 1993; Moskowitz and Grinblatt 1999) |
-| Diversified defensive allocation | Inverse-volatility / risk-parity allocation (Asness, Frazzini and Pedersen 2012) |
+| Role | V1 candidate | Starting sources |
+| --- | --- | --- |
+| Cross-asset trend following | Multi-asset time-series trend | Faber 2007; Moskowitz, Ooi and Pedersen 2012 |
+| Tactical equity/bond allocation | Dual momentum: relative and absolute momentum with a bond fallback | Antonacci 2014; Asness, Moskowitz and Pedersen 2013 |
+| Equity sector rotation, always invested | US sector rotation by 12-1 momentum | Jegadeesh and Titman 1993; Moskowitz and Grinblatt 1999 |
+| Diversified defensive allocation | Inverse-volatility / risk-parity allocation | Maillard, Roncalli and Teïletche 2010; Asness, Frazzini and Pedersen 2012 |
+
+The sector-rotation and trend candidates overlap with configurations already
+inspected on ETF-9 (see [the research ledger](RESEARCH_LEDGER.md)); their
+registrations must cite those rows under rule 2.
 
 ## 2. Evidence pack
 
@@ -80,16 +85,20 @@ carries a regression test.
 - **Registration file.** `docs/registrations/<study>.json`, committed before
   the run. Fields: configuration hashes for every declared configuration, panel
   (instrument set and provider dataset hash), period, engine hash, declared
-  variants, cost scenarios, primary reference, bootstrap block lengths,
-  repetitions and seed, deflated-Sharpe inputs (Section 4), cumulative trial
-  count and registration time.
+  variants, cost scenarios, primary reference, parameter sources and any
+  deviation reasons (rule 2), related ledger rows (rule 2), any planned
+  independent-provider cross-check, bootstrap block lengths, repetitions and
+  seed, deflated-Sharpe inputs (Section 4), cumulative trial count and
+  registration time.
 - **Tag.** An annotated git tag `study/<name>-<YYYY-MM-DD>` on the commit that
   contains the registration file and the exact source. Tags are never moved or
-  deleted. The tag is the source archive; do not copy source trees.
+  deleted. The tag is the source archive; do not copy source trees. When the
+  owner authorises it, study tags are pushed at registration so the remote
+  provides an external timestamp.
 - **Ledger.** One line per study in [the research ledger](RESEARCH_LEDGER.md),
-  including failures and abandoned studies, with panel and inspected period.
-- **Evidence.** Run bundles are stored once under `local/<study>/`; the ledger
-  row records the registration hash.
+  including failures and abandoned studies, with panel, inspected period, tag
+  and registration hash.
+- **Evidence.** Run bundles are stored once under `local/<study>/`.
 - **Changes.** A change after inspecting results is a new registration with a
   new tag that cites the prior trial count. Old outcomes are never edited.
 
@@ -101,28 +110,36 @@ or run**, whether or not its outcome was looked at. A panel is an instrument
 set together with a provider dataset.
 
 - Configurations that differ in signal, universe, rebalance schedule
-  (including rebalance-day shifts), exits, stops or risk overlays each count.
-  Parameter neighbours, controls and reversed-direction variants count.
+  (including rebalance-day shifts), exits, stops, risk overlays or sizing
+  method each count. Parameter neighbours, controls and reversed-direction
+  variants count.
 - Scenarios that do not count: cost levels, execution delay, evaluation period,
   cash-yield convention, and pure exposure scaling (a different invested
-  fraction with otherwise identical rules).
+  fraction with otherwise identical rules), even when registered as a control.
 - References (buy-and-hold, 60/40, equal weight, cash) do not count.
 - The same configuration on a different panel counts again, except an
   independent-provider cross-check declared in the original registration and
   never used for selection.
+- Evaluating an unchanged registered configuration on later data (a forward
+  journal or an extension of the same instruments and provider) does not count.
 - Reruns that reproduce an earlier result (engine replays) do not count.
 - Whenever classification is ambiguous, record the larger defensible number
   and say why in the ledger.
 
-Deflated Sharpe inputs, stated in every pack:
+Deflated Sharpe inputs, stated in every pack and computed per parent:
 
 - **N:** the ledger's cumulative trial count including the current study's
   declared configurations. A per-role count is reported alongside.
-- **V[SR]:** the variance of daily Sharpe ratios across the configurations
-  declared in the current registration (at least three: the parent and its
-  declared neighbours), under this document's cash and reference-rate
-  convention. Historical trials enter N but not V[SR], because
-  they used a different cash convention.
+- **V[SR]:** the primary DSR uses the larger of these two variances of daily
+  Sharpe ratios; the pack also reports DSR under the smaller one:
+  - the study's own: across the configurations declared in the current
+    registration (at least three: the parent and its declared neighbours;
+    rebalance-shift copies excluded), at 10 bps, under this document's cash and
+    reference-rate convention;
+  - the historical floor: across all ledger trials with a recorded
+    10 bps continuous-period Sharpe, as originally reported. It is computed
+    once from the sealed evidence and recorded in the ledger header before the
+    first registration under this standard, and is not recomputed afterwards.
 - **T, skewness, kurtosis:** the number of daily returns in the primary
   period and the sample skewness and kurtosis of the strategy's daily excess
   returns.
