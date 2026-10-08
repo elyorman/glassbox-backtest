@@ -1,5 +1,7 @@
 # Market-adjusted experiment implementation checklist
 
+> Paused, not run (2026-10-08). See [the evidence standard](../../STRATEGY_EVIDENCE.md) and [the research ledger](../../RESEARCH_LEDGER.md).
+
 Future work under [the frozen specification](../../MARKET_ADJUSTED_EXPERIMENT.md).
 The completed review adds no strategy implementation or portfolios. Supports
 PR-05, PR-06, PR-08 and PR-13. Reuse the virtual environment and shared engine;

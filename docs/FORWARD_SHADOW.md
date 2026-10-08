@@ -39,7 +39,8 @@ PYTHONPATH=local/sma200-forward-2026-10-05/source-archive PYTHONDONTWRITEBYTECOD
 The capture refuses to run from the live source tree once any registered file
 has changed; the journal's frozen archive is the required runtime. Run it from
 the repository root (the `.env` path is relative), between 16:15 ET on the
-signal day and 09:29 ET on the next session. Avoid 16:00–16:15 ET: the free
+signal day and 09:00 ET on the next session; the record timestamp is taken
+after collection and must precede the 09:30 ET open. Avoid 16:00–16:15 ET: the free
 Alpaca plan may refuse the most recent bars, and a failed response is cached
 and blocks that output directory. Use a fresh `--output` directory after any
 HTTP error.
@@ -68,7 +69,7 @@ check, not provider-authenticated proof of publication time.
 Verify at any time:
 
 ```bash
-PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m research.forward_shadow verify \
+PYTHONPATH=local/sma200-forward-2026-10-05/source-archive PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m research.forward_shadow verify \
   --journal local/sma200-forward-2026-10-05
 ```
 
@@ -89,9 +90,8 @@ with its frozen source archive on `PYTHONPATH`. Local hashes detect corruption
 and accidental editing; they do not provide an independently timestamped,
 tamper-proof public record. No data is uploaded.
 
-For example, substitute
-`PYTHONPATH=local/sma200-forward-2026-10-05/source-archive` in the commands above
-to run the registered sources after subsequent development changes the repo.
+`append` has the same requirement: run it with
+`PYTHONPATH=local/sma200-forward-2026-10-05/source-archive`.
 
 Current state: registered, **zero prospective signals**. The existing October 2
 snapshot cannot be presented as a prospective October signal. A short journal

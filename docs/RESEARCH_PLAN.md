@@ -1,5 +1,7 @@
 # Strategy Research and Backtest Validation Plan
 
+> For built-in strategies, this plan's freeze → better independent data → retest sequence, nomination gates and release-qualification steps are superseded by the [2026-10-08 strategy qualification standard](STRATEGY_EVIDENCE.md); ML model research keeps PROJECT.md's ML data workflow. Retained as research history; outcomes recorded here are unchanged and are counted in [the research ledger](RESEARCH_LEDGER.md).
+
 Prepared for Elyorjon Mannonov on 2026-10-02.
 
 This plan defines the first research campaign for the quantitative platform. We will compare multiple strategies and models through the same verified portfolio simulator, preserve unsuccessful experiments, and reserve historical periods for validation. The purpose is to determine whether any candidate has useful evidence after costs and realistic execution. An inconclusive result or rejection of every candidate is a valid outcome.

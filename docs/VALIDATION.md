@@ -398,8 +398,9 @@ qualification beyond the private Treasury overlay, richer measured execution/
 exit capacity, qualified point-in-time stock universes, DSR/PBO,
 independent-engine/Windows checks, prospective shadow
 recording and ML refitting remain separate work. ML can reuse these contracts
-and label-interval checks in Stage 6, but production model/strategy selection
-still requires empirical evidence under the agreed independent-retest process.
+and label-interval checks in Stage 6, but production model selection still
+requires empirical evidence under PROJECT.md's ML data workflow; built-in
+strategies follow [the evidence standard](STRATEGY_EVIDENCE.md).
 
 ## Frozen stock campaign and separate-provider retest
 

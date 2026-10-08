@@ -522,4 +522,5 @@ See [audit remediation](docs/AUDIT_REMEDIATION.md) for corrected engine/data beh
 The [action audit and input preflight](docs/DATA_QUALIFICATION.md) retain missing
 cash/payment fields and reviewed event classifications. Preflight templates stay
 unresolved until reviewed; schema-2 and adjusted-volume conflicts must not be
-silently bypassed to admit data to the schema-1 frozen retest.
+silently bypassed to admit data to the schema-1 frozen retest. That retest no
+longer gates built-ins ([evidence standard](docs/STRATEGY_EVIDENCE.md)).

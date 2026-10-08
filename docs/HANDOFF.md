@@ -1,4 +1,4 @@
-# Repository handoff — 2026-10-07
+# Repository handoff — 2026-10-08
 
 This checkpoint preserves Elyorjon Mannonov's personal project when continuing
 from another account. No issue-tracker tickets or ticket-prefixed commit
@@ -12,9 +12,9 @@ this wrap-up.
 
 1. [AGENTS.md](../AGENTS.md) — engineering and financial invariants.
 2. [PROJECT.md](../PROJECT.md) — product requirements, roadmap and release gates.
-3. [Research status](RESEARCH_STATUS.md) — completed studies and limitations.
-4. [Design review](RESEARCH_DESIGN_REVIEW.md) and
-   [market-adjusted experiment](MARKET_ADJUSTED_EXPERIMENT.md) — the next task.
+3. [Built-in strategy evidence standard](STRATEGY_EVIDENCE.md) and
+   [research ledger](RESEARCH_LEDGER.md) — governing standard and every study.
+4. [Research status](RESEARCH_STATUS.md) — historical studies and limitations.
 
 The product is a local-first quantitative stock research and risk platform,
 with explainable/no-code workflows and perpetual purchased-version use. V1
@@ -32,7 +32,8 @@ See [data integration](DATA_INTEGRATION.md), [backtester](BACKTESTER.md),
 [validation](VALIDATION.md) and [audit remediation](AUDIT_REMEDIATION.md).
 
 Six stock hypotheses were examined on original 22-stock and broader 47-stock
-panels. The ledger retains 288 unique stock scenarios, with copied references
+panels. The study manifests retain 288 unique stock scenarios (44 counted trials
+across all studies in the [research ledger](RESEARCH_LEDGER.md)), with copied references
 identified; these are not independent ideas. Earlier sector-ETF and robustness
 searches remain disclosed. Momentum, reversal, low volatility, high proximity
 and unusual-volume parents fail their registered screens. SMA200 passes its
@@ -44,7 +45,8 @@ saved-outcome recovery are preserved. All 108 saved bundles were verified;
 recovery performed zero additional financial simulations. Details are in
 [volume research](VOLUME_RESEARCH.md).
 
-The last completed task was a research-design review, not a new backtest.
+The last completed research task before the 2026-10-08 standard change was a
+research-design review, not a new backtest.
 It checked 8,891 prior manifest file entries, twelve parent/panel findings,
 cached monthly/lagged-cash coverage and unchanged runtime/journal evidence.
 Its final evidence seal contains 31 files. Review-script manifest-name and
@@ -54,11 +56,15 @@ execution; the latter was a reporting-check issue, not incorrect returns.
 ## Exact next task
 
 The 2026-10-08 [built-in strategy evidence standard](STRATEGY_EVIDENCE.md)
-replaced the pass/fail contract. Next work follows the standard's plans in
-`docs/superpowers/plans/`: documentation rewrite (done), verified bug fixes,
-engine prerequisites (cash yield, read-only references, bar frequency), the
-four ETF strategy families, then ETF data collection and the first evidence
-pack.
+replaced the pass/fail contract; the documentation rewrite is done. Next work
+follows the design spec's Section 5 ([spec](superpowers/specs/2026-10-08-strategy-qualification-standard-design.md)),
+each step written as its own plan under `docs/superpowers/plans/` first:
+verified bug fixes; engine prerequisites (cash yield, read-only references, bar
+frequency); the ETF strategy families (`ts_trend`, `dual_momentum`,
+`inverse_vol`; sector rotation reuses `momentum`) and the deflated Sharpe ratio;
+the historical V[SR] floor recorded in the [research ledger](RESEARCH_LEDGER.md);
+then ETF data collection, the evidence-pack generator and the first registered
+study.
 
 The [market-adjusted momentum specification](MARKET_ADJUSTED_EXPERIMENT.md) is
 paused, not run. Its frozen method hash and registration envelope remain on
@@ -78,13 +84,17 @@ verification/capture; see [forward journal](FORWARD_SHADOW.md).
 
 ## Data policy and local files
 
-Continue existing Alpaca/cached data for disclosed exploratory research.
-Paid acquisition is deferred until promising customer interest. Current/surviving
-panels, missing dividend payment dates, corporate-action/identity/calendar/
-delisting completeness, revisions and project-use qualification remain unresolved.
-All inspected 2016–2026 history is exposed. Better data cannot create an edge or
-restore a fresh temporal holdout. Qualified independent-data/use evidence and
-genuinely uninspected evidence remain required before production claims.
+Built-ins are built and researched on existing Alpaca daily data under
+[the evidence standard](STRATEGY_EVIDENCE.md), Section 5. Before reference
+numbers are published, the project owner decides whether an independent-provider
+cross-check (target: Tiingo business plan) is feasible; confirming Alpaca's
+terms for commercial research use is an open action item. Survivor panels,
+missing dividend payment dates, corporate-action/identity/calendar/delisting
+completeness and revisions remain unresolved for the stock studies. All
+inspected 2016–2026 history is listed in the [research ledger](RESEARCH_LEDGER.md)
+and disclosed, never relabelled as untouched; forward journals and future
+sessions supply fresh evidence. Stock-based strategies need survivorship-free
+point-in-time data before they can become built-ins.
 
 Git contains source, tests, product requirements, research methods/status and
 handoff instructions. It deliberately excludes `.env`, credentials, `.venv`,

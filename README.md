@@ -40,7 +40,7 @@ The agreed build order is:
 
 | Stage | State |
 | --- | --- |
-| 1 Data | Built: CSV/JSON/Parquet snapshots, EODHD import, dated index membership, action audit. Open: provider qualification, columnar storage for index-scale history. |
+| 1 Data | Built: CSV/JSON/Parquet snapshots, EODHD import, dated index membership, action audit. Open: provider qualification, DuckDB query storage, memory and speed at index scale (all bars load as Python Decimal objects). |
 | 2 Backtester | Built: next-open execution, shared cash, costs, splits/dividends/delistings, stops, audit bundles. Open: target/trailing exits, entry-to-exit trade records. |
 | 3 Risk/sizing | Built. |
 | 4 Strategies | Six research families implemented. ETF built-ins: not started. |
