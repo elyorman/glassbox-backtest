@@ -952,45 +952,35 @@ This is a product feature, not merely debugging metadata.
 
 ## Reference Strategies
 
-V1 must ship **3–4 distinct, well-researched, validated built-in strategies**
-(minimum three; target four). They must be ready to configure, scan, backtest,
-validate and inspect through Desktop, with explainable risk/sizing defaults.
-This is a release requirement, not an optional collection of example scripts.
+V1 must ship **3–4 distinct, well-researched built-in strategies** (minimum
+three; target four), ready to configure, scan, backtest, validate and inspect
+through Desktop with explainable risk/sizing defaults. The qualification and
+delivery contract is [the built-in strategy evidence standard](docs/STRATEGY_EVIDENCE.md),
+adopted 2026-10-08. In summary, a built-in qualifies when it has:
 
-Exact strategies will be selected after research, but likely categories include:
+- an economic rationale with at least two independent published sources;
+- fixed rules declared in a committed registration before the run, each
+  parameter sourced from the literature and related prior studies cited;
+- a verified implementation (hand-calculated tests, no-look-ahead test,
+  byte-for-byte reproduction);
+- a complete evidence pack: net-of-cost results at three cost levels,
+  bootstrap uncertainty and a deflated Sharpe ratio using the disclosed trial
+  count, period and drawdown breakdowns, sensitivity tables, a registered
+  primary reference plus SPY, 60/40 and equal-weight references, T-bill cash
+  yield, a forward signal journal and a reproduction command;
+- a distinct portfolio role from every other built-in;
+- a plain-language limitations page.
 
-- momentum/trend strategy;
-- cross-sectional alpha/ranking strategy, potentially ML-assisted;
-- ETF/sector rotation strategy.
+There is no return, Sharpe or benchmark-beating threshold. Honest evidence that
+a strategy underperformed in some regime is a deliverable, not a failure.
 
-Only ship strategies whose implementation and historical validation meet the project's quality bar.
-
-Each included strategy needs a versioned research/usage dossier containing:
-
-- primary research sources and a clear economic or behavioral hypothesis;
-- exact entry/exit/ranking rules, supported universe, holding horizon and data requirements;
-- defined execution/cost assumptions, risk controls and sizing calculations;
-- predeclared objectives and appropriate benchmark/baseline comparisons;
-- honest net-of-cost chronological OOS/walk-forward results, parameter/cost
-  sensitivity, regime behavior and applicable universe checks;
-- frozen methodology and a retest on qualified better independent data before
-  production/reference claims, preserving prior searches and exposed periods;
-- documented drawdowns, recovery, failure modes, limitations and intended use;
-- reproducible configurations/results and an understandable user explanation.
-
-The strategies must represent meaningfully different hypotheses or portfolio
-roles. Nearby parameter settings, different sizing presets, benchmarks and cash
-controls do not count as separate qualified strategies. An ML ranking may be
-part of a strategy, but adding a model does not automatically create another
-qualified strategy. A defensive strategy can have a different objective from
-a return-seeking one; each must meet its own predeclared, benchmark-aware
-acceptance criteria rather than an invented universal CAGR requirement.
-
-The current ten rule recipes and the audited momentum/trend parents remain
-research candidates; none is currently a qualified production strategy. If
-fewer than three qualify, retain that finding and continue bounded, logged
-research before release. Do not fill the quota with failed candidates, change
-criteria after seeing results or relabel examined history as fresh validation.
+The V1 candidates are ETF-based and literature-backed: multi-asset
+time-series trend, dual momentum, US sector rotation and defensive
+inverse-volatility allocation. Stock-based strategies remain research
+candidates for a later stage with survivorship-free data. Every study,
+including failures, is recorded in [the research ledger](docs/RESEARCH_LEDGER.md).
+Do not fill the quota with parameter variants, change a registered
+configuration after seeing results, or relabel inspected history as untouched.
 
 ## Production Models
 
@@ -1257,7 +1247,12 @@ Current implementation: frozen finite rule-strategy campaigns, snapshot-bound ca
 
 The separate private [robustness audit](docs/RESEARCH_PLAN.md#robustness-audit-results--2026-10-03) has also run on already exposed history: 30 registered parameter/control/cost trials and five reused original portfolios. It implements reconciled asset/holding attribution, rolling returns, recovery, lagged historical-cash and exposure diagnostics with independently checked stop fills and verified report exports. Both fixed parents pass the limited positive-CAGR neighbor rule but fail their predeclared objectives; no production nominee is created. The audit and all-ten comparison remain exploratory evidence outside the qualified campaign and preserve the original search history.
 
-Freeze promising candidates and re-test with better independent data before commercial reference claims. Another vendor over the same dates does not constitute a new temporal holdout. The separately recorded 2026-10-03 full-period exploratory run exposes 2024–2026, so those dates can no longer serve as untouched final evidence for future selection.
+Before publishing reference numbers, the project owner decides whether to
+cross-check a built-in on an independent provider and records the decision and
+reason in its evidence pack. Another vendor over
+the same dates is a data cross-check, not a new temporal holdout. All inspected
+history is listed in [the research ledger](docs/RESEARCH_LEDGER.md); forward
+journals and future sessions supply fresh evidence.
 
 The separate [stock campaign](docs/RESEARCH_PLAN.md#stock-campaign-results--2026-10-03)
 now implements the five-step research workflow on an explicitly surviving
@@ -1309,7 +1304,7 @@ The [audit remediation](docs/AUDIT_REMEDIATION.md) adds financial edge-case fixe
 V1 is ready to sell only when:
 
 1. supported data sources work reliably and licensing is understood;
-2. at least three distinct built-in strategies (target four) meet the Reference Strategies qualification/delivery contract, with documented methodology and honest OOS/walk-forward evidence; supplied models meet the same relevant evidence standard;
+2. at least three distinct built-in strategies (target four) meet [the built-in strategy evidence standard](docs/STRATEGY_EVIDENCE.md), each with its complete evidence pack and limitations page; supplied models meet the same relevant evidence standard;
 3. backtesting semantics are explicit and covered by tests;
 4. risk/sizing/portfolio accounting are verified;
 5. results are reproducible and provenance is recorded;
@@ -1326,7 +1321,7 @@ V1 is ready to sell only when:
 
 - Build in the nine-stage roadmap above, starting with the market-data layer before the backtester.
 - The 2026-10-03 product positioning and PR-01–PR-15 acceptance contract guide every substantial feature and release claim.
-- V1 requires 3–4 distinct, well-researched, validated built-in strategies (minimum three; target four); the research platform and custom builder do not replace this requirement.
+- V1 requires 3–4 distinct, well-researched built-in strategies (minimum three; target four) under the 2026-10-08 disclosed-evidence standard; the research platform and custom builder do not replace this requirement. V1 candidates are ETF-based.
 - Product is a paid local desktop quant research system, not SaaS.
 - One-time purchase/perpetual use of delivered release is the intended commercial model.
 - Windows is primary; Linux is supported; macOS later.
@@ -1343,7 +1338,7 @@ V1 is ready to sell only when:
 - Survivorship-aware internal research data remains a priority; Norgate's public commercial-use limitation pauses that option pending an applicable agreement. EODHD/Massive fixed-panel pilots remain unqualified.
 - Local CSV/Parquet import is required.
 - Prefer independent provider verification before shipping.
-- Use free/free-tier market data for initial development/training/backtesting where permitted, then re-test frozen promising candidates on a paid/higher-quality and preferably independent dataset before commercial reference claims.
+- Use free/free-tier market data for development and built-in strategy research where permitted; cross-check on an independent provider where feasible before publishing reference numbers, and disclose if not done. Paid survivorship-free data is a later requirement for stock-based strategies, not for V1 ETF built-ins.
 - Data-provider abstraction is mandatory.
 - React/TypeScript + Tauri-like shell + local Python engine is the preferred UI architecture to validate.
 - DuckDB + Parquet is the preferred local analytical storage direction.
