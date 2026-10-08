@@ -851,7 +851,7 @@ During initial development, use legally permitted **free/free-tier historical da
 
 For built-in strategies, [the evidence standard](docs/STRATEGY_EVIDENCE.md) governs: V1 ETF built-ins are built and researched on Alpaca daily data, rules come from published sources and are registered before the run, and before reference numbers are published the project owner decides whether an independent-provider cross-check is feasible; the evidence pack records the decision, its reason and any result. A material performance difference across providers is a data-quality finding to investigate and disclose, not something to hide.
 
-For ML models and future stock-based strategies, once a candidate is promising, freeze its methodology/configuration, obtain higher-quality (for stocks, survivorship-free point-in-time) data, and re-run the important experiments from scratch before shipping or reference claims. Customer-facing use remains BYO-provider/local-data oriented; we do not redistribute provider datasets unless licensing explicitly permits it.
+For ML models, once a candidate is promising, freeze its methodology/configuration, obtain higher-quality data and re-run the important experiments from scratch before shipping or reference claims. Future stock-based built-ins follow [the evidence standard](docs/STRATEGY_EVIDENCE.md) on survivorship-free point-in-time data. Customer-facing use remains BYO-provider/local-data oriented; we do not redistribute provider datasets unless licensing explicitly permits it.
 
 ## Data Provider Strategy
 
@@ -1211,7 +1211,7 @@ classification, and reports all input/evidence blockers without executing a
 strategy. It does not complete provider qualification. The frozen-retest gate
 it was built for no longer governs built-ins; see [the evidence standard](docs/STRATEGY_EVIDENCE.md).
 
-The tested local contract supports synthetic backtester development and a private, explicitly unqualified fixed-ETF market diagnostic requested on 2026-10-03. Complete actual-provider qualification before the registered empirical campaign or production claims; neither synthetic fixtures nor exploratory downloads establish qualified market coverage. The research-only collector and issuer normalization are documented in [the research plan](docs/RESEARCH_PLAN.md#first-real-market-exploratory-run); they are not a production API adapter.
+The tested local contract supports synthetic backtester development and a private, explicitly unqualified fixed-ETF market diagnostic requested on 2026-10-03. Complete actual-provider qualification before the registered empirical campaign or production claims; neither synthetic fixtures nor exploratory downloads establish qualified market coverage. For built-ins, [the evidence standard](docs/STRATEGY_EVIDENCE.md), Section 5, governs data use and disclosure. The research-only collector and issuer normalization are documented in [the research plan](docs/RESEARCH_PLAN.md#first-real-market-exploratory-run); they are not a production API adapter.
 
 ### Stage 2 — Backtester
 
