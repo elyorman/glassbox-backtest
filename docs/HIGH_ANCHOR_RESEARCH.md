@@ -1,5 +1,7 @@
 # High-anchor stock hypothesis — 2026-10-05
 
+> Superseded by the [2026-10-08 strategy qualification standard](STRATEGY_EVIDENCE.md); retained as research history. Outcomes recorded here are unchanged and are counted in [the research ledger](RESEARCH_LEDGER.md).
+
 This separately registered study evaluates one additional stock hypothesis on
 the frozen 22-stock and 47-stock Alpaca panels. It supports PR-05, PR-06, PR-08
 and PR-13. It does not modify production trading/accounting behavior or qualify

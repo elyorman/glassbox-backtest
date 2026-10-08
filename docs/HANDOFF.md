@@ -53,24 +53,22 @@ execution; the latter was a reporting-check issue, not incorrect returns.
 
 ## Exact next task
 
-Implement the [frozen market-adjusted momentum specification](MARKET_ADJUSTED_EXPERIMENT.md)
-and follow its [implementation checklist](superpowers/plans/2026-10-06-market-adjusted-experiment.md).
-Do not start performance runs before correctness tests, review and an archived
-implemented-runtime registration.
+The 2026-10-08 [built-in strategy evidence standard](STRATEGY_EVIDENCE.md)
+replaced the pass/fail contract. Next work follows the standard's plans in
+`docs/superpowers/plans/`: documentation rewrite (done), verified bug fixes,
+engine prerequisites (cash yield, read-only references, bar frequency), the
+four ETF strategy families, then ETF data collection and the first evidence
+pack.
+
+The [market-adjusted momentum specification](MARKET_ADJUSTED_EXPERIMENT.md) is
+paused, not run. Its frozen method hash and registration envelope remain on
+record:
 
 The byte-frozen method SHA-256 is
 `5ebd7c6582feacffca17e6de5aae8ae5458edaf670ae94cfba3edcb0904ac378`.
 Its ignored registration envelope is
 `local/research-design-review-2026-10-06/NEXT_EXPERIMENT_SPEC.json`.
 The method freeze does not register an unimplemented runtime.
-
-One 36-month market-adjusted parent, one 30-month neighbor, ordinary momentum
-and standardized-total-return controls, plus SPY/equal-weight/cash references
-are specified. Both existing panels, common January 31, 2019 start, fixed folds,
-10/25 bps per side and second-open delay give **126 new portfolios**. Old
-benchmark curves cannot be reused after changed starts/resets. Only the parent
-can freeze after both panels pass. This is a momentum-family adaptation, not
-automatically another distinct strategy toward the release quota.
 
 The existing SMA200 journal is separate and unchanged: it has zero signal
 records at this handoff. Its first capture window is after the October 30, 2026

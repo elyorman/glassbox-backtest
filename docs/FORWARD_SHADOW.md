@@ -30,11 +30,19 @@ journal through a separately registered version before that calendar expires.
 Nothing is scheduled automatically. Run the capture command in the window:
 
 ```bash
-PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m research.forward_shadow capture \
+PYTHONPATH=local/sma200-forward-2026-10-05/source-archive PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m research.forward_shadow capture \
   --journal local/sma200-forward-2026-10-05 \
   --signal-session 2026-10-30 \
   --output local/sma200-forward-inputs-2026-10-30
 ```
+
+The capture refuses to run from the live source tree once any registered file
+has changed; the journal's frozen archive is the required runtime. Run it from
+the repository root (the `.env` path is relative), between 16:15 ET on the
+signal day and 09:29 ET on the next session. Avoid 16:00–16:15 ET: the free
+Alpaca plan may refuse the most recent bars, and a failed response is cached
+and blocks that output directory. Use a fresh `--output` directory after any
+HTTP error.
 
 It reads the existing `.env` credentials, requests only raw Alpaca SIP daily bars
 and corporate actions for the fixed names plus SPY, saves original response

@@ -1,5 +1,7 @@
 # Stock Research Decision Review — 2026-10-05
 
+> Superseded by the [2026-10-08 strategy qualification standard](STRATEGY_EVIDENCE.md); retained as research history. Outcomes recorded here are unchanged and are counted in [the research ledger](RESEARCH_LEDGER.md).
+
 This review consolidates five stock-family hypotheses on the original 22-stock
 and broader 47-stock panels. It supports PR-05, PR-06, PR-08 and PR-13.
 It uses existing sealed outcomes and adds **zero portfolio simulations**.

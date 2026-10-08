@@ -1,5 +1,7 @@
 # Market-adjusted momentum experiment
 
+> Superseded by the [2026-10-08 strategy qualification standard](STRATEGY_EVIDENCE.md); retained as research history. Outcomes recorded here are unchanged and are counted in [the research ledger](RESEARCH_LEDGER.md).
+
 Specification v1, frozen on 2026-10-06 before this experiment's feature scores,
 rankings or portfolio outcomes. Supports PR-05, PR-06, PR-08 and PR-13.
 The [design review](RESEARCH_DESIGN_REVIEW.md) retains motivation, alternatives,

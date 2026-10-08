@@ -1,5 +1,7 @@
 # Frozen Trend: Independent-Data Input Brief
 
+> Superseded by the [2026-10-08 strategy qualification standard](STRATEGY_EVIDENCE.md); retained as research history. Outcomes recorded here are unchanged and are counted in [the research ledger](RESEARCH_LEDGER.md).
+
 Current direction — 2026-10-05: the user chose to [continue with Alpaca](ALPACA_RESEARCH.md)
 until promising customer interest. Independent paid acquisition is deferred;
 this brief remains a later acceptance contract, not an active purchase task.

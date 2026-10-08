@@ -1,5 +1,7 @@
 # Next Experiment: Unusual Dollar-Volume Ranking
 
+> Superseded by the [2026-10-08 strategy qualification standard](STRATEGY_EVIDENCE.md); retained as research history. Outcomes recorded here are unchanged and are counted in [the research ledger](RESEARCH_LEDGER.md).
+
 Specification v1, fixed on 2026-10-05 before any outcomes from this rule.
 Supports PR-05, PR-06, PR-08 and PR-13. This is the next **exploratory hypothesis**,
 not a strategy selection or a claim of profitability. The runtime and campaign

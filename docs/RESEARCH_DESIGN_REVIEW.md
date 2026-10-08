@@ -1,5 +1,7 @@
 # Research design review — 2026-10-06
 
+> Superseded by the [2026-10-08 strategy qualification standard](STRATEGY_EVIDENCE.md); retained as research history. Outcomes recorded here are unchanged and are counted in [the research ledger](RESEARCH_LEDGER.md).
+
 Prepared for Elyorjon Mannonov. Supports PR-05, PR-06, PR-08 and
 PR-13. Uses sealed outcomes and cached input coverage; adds **zero simulations**.
 

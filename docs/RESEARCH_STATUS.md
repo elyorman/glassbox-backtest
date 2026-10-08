@@ -1,5 +1,7 @@
 # Research Status and Historical Evidence
 
+> Superseded by the [2026-10-08 strategy qualification standard](STRATEGY_EVIDENCE.md); retained as research history. Outcomes recorded here are unchanged and are counted in [the research ledger](RESEARCH_LEDGER.md).
+
 Current data decision — 2026-10-05: [continue with Alpaca](ALPACA_RESEARCH.md)
 for development and exploratory research until promising customer interest.
 Paid independent acquisition and further EODHD collection are deferred.
