@@ -34,8 +34,8 @@ in V1 Developer/Source; richer Desktop retraining UI is optional.
 V1 also requires **3–4 distinct, well-researched built-in strategies**
 (minimum three; target four) under
 [the built-in strategy evidence standard](docs/STRATEGY_EVIDENCE.md), adopted
-2026-10-08: disclosed evidence packs, no pass/fail return threshold, ETF-based
-V1 candidates, one registration and git tag per study, and
+2026-10-08: disclosed evidence packs, no return, Sharpe or benchmark-beating
+threshold, ETF-based V1 built-ins, one registration and git tag per study, and
 [the research ledger](docs/RESEARCH_LEDGER.md) for every outcome. Engine
 tools, parameter/sizing variants and benchmarks do not count as strategies.
 Where any other document disagrees with the standard, the standard governs.
@@ -152,15 +152,18 @@ Rules:
 ### Provider Priorities
 
 Current user decision (2026-10-08): build and research V1 ETF built-ins on
-the existing Alpaca daily data. Cross-check on an independent provider
-(target: Tiingo business plan) before publishing reference numbers; disclose
-if not done. Paid survivorship-free data is deferred to a later stock-strategy
-stage. Confirming Alpaca's terms for commercial research use is an open
-action item. See `docs/STRATEGY_EVIDENCE.md`, Section 5.
+the existing Alpaca daily data. Before reference numbers are published, the
+project owner decides whether an independent-provider cross-check (target:
+Tiingo business plan) is feasible; the evidence pack records the decision,
+its reason and any result. Do not buy data or skip the cross-check on your
+own judgment. Survivorship-free point-in-time data and further EODHD
+collection are deferred to a later stock-strategy stage. Confirming Alpaca's
+terms for commercial research use is an open action item. See
+`docs/STRATEGY_EVIDENCE.md`, Section 5.
 
 Current plan, subject to hands-on validation and licensing review:
 
-- Internal research/validation: prioritize survivorship-aware point-in-time data. Norgate's current public business/commercial-use limitation pauses that option pending an applicable agreement; see `docs/INDEPENDENT_DATA_RETEST.md` for the conditional EODHD/Massive fixed-panel pilot.
+- Internal stock research (later stage): prioritize survivorship-aware point-in-time data. Norgate's current public business/commercial-use limitation pauses that option pending an applicable agreement; see `docs/INDEPENDENT_DATA_RETEST.md` for the conditional EODHD/Massive fixed-panel pilot.
 - First customer-facing API adapter: EODHD.
 - Second customer-facing adapter: Tiingo.
 - Future integrations: Alpaca (especially paper/live trading roadmap), Massive/Polygon for richer real-time/intraday needs.
@@ -312,8 +315,9 @@ tool; built-in qualification follows `docs/STRATEGY_EVIDENCE.md` instead of
 its nomination gates. Keep failure history and evidence hashes intact. Do not
 relabel synthetic engineering campaigns as empirical validation or a
 maximum-mean bootstrap diagnostic as DSR. Changing a configuration after
-inspecting results is a new registration with a new git tag that cites the
-prior trial count.
+inspecting results, or correcting the engine after a registered run, is a new
+registration with a new git tag that cites the prior trial count; both
+outcomes stay on record and the fix carries a regression test.
 
 V1 must support serious validation, not just a single historical equity curve:
 
@@ -437,9 +441,9 @@ Custom strategy/features/integrations are separate paid work. OEM/commercial red
 
 ## Research Data Cost & Validation Discipline
 
-- Free/free-tier historical data may be used during initial engine development, model training, exploratory backtesting, and test construction where provider terms permit.
-- Do not present free-development-dataset results as final commercial validation.
-- Before publishing reference numbers for a built-in, cross-check on an independent provider where feasible and disclose if not done. Paid survivorship-free data is required before stock-based strategies can become built-ins.
+- Free/free-tier historical data may be used for engine development, model training, exploratory backtesting, test construction and V1 ETF built-in research (Alpaca daily data; `docs/STRATEGY_EVIDENCE.md` Section 5) where provider terms permit.
+- Do not present free-dataset results as validated or independently verified; evidence packs disclose the provider and its limitations.
+- Before reference numbers for a built-in are published, the project owner decides whether an independent-provider cross-check is feasible; the evidence pack records the decision, its reason and any result. Survivorship-free point-in-time data is required before stock-based strategies can become built-ins.
 - Treat cross-provider degradation as a signal to investigate data assumptions, corporate actions, survivorship, timestamps, normalization, or overfitting.
 - Never redistribute third-party market datasets unless the license explicitly permits it; normal customer use remains BYO provider/local data.
 
