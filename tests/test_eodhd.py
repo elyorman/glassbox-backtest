@@ -42,6 +42,7 @@ class EodhdTests(unittest.TestCase):
         self.assertFalse(data.metadata.actions_complete)
         self.assertIn(("eodhd:response:SYNTH.US", sha256(RAW).hexdigest()), data.metadata.input_hashes)
         self.assertTrue(any("split-adjusted volume" in s for s in data.metadata.limitations))
+        self.assertEqual(data.metadata.adjustment_policy, "raw_prices_split_adjusted_volume")
         self.assertTrue(any("incomplete" in s for s in data.metadata.limitations))
 
     def test_content_addressed_cache_is_immutable_and_contains_original_bytes(self):

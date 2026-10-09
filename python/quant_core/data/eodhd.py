@@ -18,7 +18,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from quant_core.data import Bar, DataMetadata, Security, Snapshot
+from quant_core.data import Bar, DataMetadata, RAW_PRICES_SPLIT_ADJUSTED_VOLUME, Security, Snapshot
 from quant_core.provenance import canonical_json, content_hash
 
 
@@ -159,7 +159,8 @@ class EodhdJsonSource:
         limitations.append("Supplied registry/calendar do not establish historical index membership or provider delisting coverage.")
         if not self.metadata.actions_complete:
             limitations.append("Corporate actions are incomplete: bars alone do not establish splits, dividends, payable dates or final delisting outcomes.")
-        metadata = replace(self.metadata, limitations=tuple(dict.fromkeys(limitations)),
+        metadata = replace(self.metadata, adjustment_policy=RAW_PRICES_SPLIT_ADJUSTED_VOLUME,
+                           limitations=tuple(dict.fromkeys(limitations)),
                            input_hashes=tuple(self.metadata.input_hashes) + tuple(hashes))
         try:
             snapshot = Snapshot(self.sessions, tuple(bars), metadata, self.securities, actions)

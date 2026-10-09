@@ -10,7 +10,7 @@ from pathlib import Path
 
 from quant_core.backtest.contracts import SignalDecision, SourceSpec
 from quant_core.backtest.sources import OrderBatch
-from quant_core.data import Security, Snapshot, identity, number, session
+from quant_core.data import Security, Snapshot, identity, number, require_raw_volume, session
 from quant_core.data.adjustments import adjusted_quantity
 from quant_core.execution import ExecutionProfile, OrderRequest
 from quant_core.features import PRICE_POLICY, nearness_to_high, signal_prices, trailing_mean, trailing_return, realized_volatility
@@ -166,6 +166,7 @@ class RuleStrategy:
 
     def validate_run(self, snapshot, run_config):
         """Optional source preflight hook; never reads outcomes or changes configuration."""
+        require_raw_volume(snapshot.metadata, "Strategy liquidity rules")
         if tuple(snapshot.sessions) != self.calendar or run_config.start != self.first_signal_session:
             raise ValueError("Strategy calendar/start must match its frozen run binding")
         registry = {s.security_id: s for s in snapshot.securities}

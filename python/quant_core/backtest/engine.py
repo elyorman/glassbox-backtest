@@ -13,7 +13,7 @@ from quant_core.backtest.contracts import (
     OrderRecord, RunConfig, RunManifest, RunSummary, SourceSpec,
 )
 from quant_core.backtest.sources import OrderBatch, OrderSchedule, OrderSource, SessionContext
-from quant_core.data import CashDelisting, Dividend, Snapshot, Split
+from quant_core.data import CashDelisting, Dividend, Snapshot, Split, require_raw_volume
 from quant_core.data.quality import check_quality
 from quant_core.execution import OrderRequest
 from quant_core.portfolio import PortfolioLedger, Receivable, ZERO
@@ -55,6 +55,8 @@ class _Simulation:
         if start not in snapshot.sessions or end not in snapshot.sessions or start > end:
             raise ValueError("Run boundaries must be supplied calendar sessions, start <= end")
         self.config = replace(config, start=start, end=end, universe=universe)
+        if config.risk is not None:
+            require_raw_volume(snapshot.metadata, "Risk liquidity limits")
         validator = getattr(source, "validate_run", None)
         if validator is not None:
             if not callable(validator):

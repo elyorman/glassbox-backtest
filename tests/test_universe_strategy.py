@@ -36,7 +36,8 @@ def fixture():
 
 class UniverseStrategyTests(unittest.TestCase):
     @unittest.skipUnless(find_spec("pyarrow"), "Optional PyArrow is not installed")
-    def test_original_provider_response_to_parquet_to_dated_portfolio(self):
+    def test_provider_response_roundtrips_and_raw_volume_portfolio_runs_from_parquet(self):
+        from quant_core.data import RAW_PRICES_SPLIT_ADJUSTED_VOLUME
         from quant_core.data.eodhd import EodhdJsonSource
         from quant_core.data.parquet import save_parquet_snapshot, load_parquet_snapshot
         data, members, recipe = fixture()
@@ -47,15 +48,20 @@ class UniverseStrategyTests(unittest.TestCase):
         imported = EodhdJsonSource(responses, {a+".US":a for a in recipe.universe}, data.sessions,
                                   data.securities, replace(data.metadata, source="eodhd", actions_complete=False)).load()
         with TemporaryDirectory() as folder:
-            save_parquet_snapshot(imported, Path(folder)/"data")
-            loaded = load_parquet_snapshot(Path(folder)/"data")
+            save_parquet_snapshot(imported, Path(folder)/"provider")
+            save_parquet_snapshot(data, Path(folder)/"raw")
+            provider = load_parquet_snapshot(Path(folder)/"provider")
+            raw = load_parquet_snapshot(Path(folder)/"raw")
+        self.assertEqual(provider.dataset_hash, imported.dataset_hash)
+        self.assertEqual(provider.metadata.adjustment_policy, RAW_PRICES_SPLIT_ADJUSTED_VOLUME)
         execution = ExecutionProfile("0")
-        result = run_backtest(loaded, build_strategy(loaded, recipe, execution=execution, membership=members),
-                             RunConfig("1000", execution, recipe.universe,
-                                       actions_policy="allow_incomplete_diagnostic"))
+        with self.assertRaisesRegex(ValueError, "raw share volume required"):
+            run_backtest(provider, build_strategy(provider, recipe, execution=execution, membership=members),
+                         RunConfig("1000", execution, recipe.universe, actions_policy="allow_incomplete_diagnostic"))
+        result = run_backtest(raw, build_strategy(raw, recipe, execution=execution, membership=members),
+                              RunConfig("1000", execution, recipe.universe))
         self.assertEqual([f.security_id for f in result.fills], ["A", "A", "B"])
         self.assertEqual(result.summary.final_equity, 1000)
-        self.assertFalse(loaded.metadata.actions_complete)
 
     def test_member_removal_exits_and_new_member_enters_at_scheduled_rebalance(self):
         data, members, recipe = fixture()
