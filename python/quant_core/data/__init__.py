@@ -118,6 +118,10 @@ class CashDelisting:
             raise ValueError("Delisting settlement cannot be negative")
 
 
+RAW_PRICES_SPLIT_ADJUSTED_VOLUME = "raw_prices_split_adjusted_volume"
+ADJUSTMENT_POLICIES = ("raw", RAW_PRICES_SPLIT_ADJUSTED_VOLUME)  # Prices are always raw.
+
+
 @dataclass(frozen=True)
 class DataMetadata:
     source: str
@@ -125,7 +129,7 @@ class DataMetadata:
     universe_policy: str
     actions_complete: bool
     calendar_name: str
-    adjustment_policy: str = "raw"
+    adjustment_policy: str = "raw"  # Volume basis: "raw" or RAW_PRICES_SPLIT_ADJUSTED_VOLUME.
     limitations: tuple[str, ...] = ()
     input_hashes: tuple[tuple[str, str], ...] = ()
 
@@ -137,7 +141,7 @@ class DataMetadata:
             raise ValueError("retrieved_at must be timezone-aware")
         if type(self.actions_complete) is not bool:
             raise ValueError("actions_complete must explicitly be True or False")
-        if self.adjustment_policy != "raw":
+        if self.adjustment_policy not in ADJUSTMENT_POLICIES:
             raise ValueError("Execution snapshots must contain raw prices")
         if isinstance(self.limitations, str) or any(not isinstance(v, str) for v in self.limitations):
             raise ValueError("limitations must be a sequence of strings")
@@ -151,6 +155,14 @@ class DataMetadata:
                for name, digest in hashes):
             raise ValueError("input_hashes requires names and SHA-256 hex digests")
         object.__setattr__(self, "input_hashes", hashes)
+
+
+def require_raw_volume(metadata: DataMetadata, purpose: str) -> None:
+    """Liquidity rules count shares in each bar's own units; adjusted volume would double-count splits."""
+    if metadata.adjustment_policy != "raw":
+        raise ValueError(f"{purpose}: raw share volume required, but this snapshot's volume is "
+                         f"split-adjusted (adjustment_policy={metadata.adjustment_policy}); reconstruct raw "
+                         "volume from reviewed complete splits or use a raw-volume source")
 
 
 @dataclass(frozen=True)
