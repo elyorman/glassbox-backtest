@@ -437,6 +437,8 @@ git commit -m "Add provider adjustment cross-check for declared splits and divid
 
 ### Task 4: Cross-check EODHD `adjusted_close` at import
 
+> **Revised after review:** the Task 4 review-fix commit supersedes `_adjustment_crosscheck` below (plausibility filter, imprecise pairs disclosed not fatal, window in messages, five more tests).
+
 **Files:** Modify `python/quant_core/data/eodhd.py`; Test `tests/test_eodhd.py`
 
 - [ ] **Step 1: Write the failing tests** — in `tests/test_eodhd.py`, add after the `RAW = (...)` constant:
@@ -691,7 +693,7 @@ to
 - [ ] **Step 4: Run Parquet tests and the full suite**
 
 Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_parquet -v 2>&1 | tail -3` → `OK`.
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 636 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 641 tests`, `OK`.
 
 - [ ] **Step 5: Commit**
 
@@ -734,8 +736,10 @@ price or signal series. The importer uses it only to cross-check supplied
 splits and cash dividends: between consecutive sessions the provider's implied
 adjustment must match the declared actions within 0.1% plus half a unit of the
 finest decimal it prints; sessions whose rounding is too coarse to verify are
-reported as such, and sessions without a usable adjusted close are excluded
-visibly. For adjusted values below about 0.1 a 4-decimal series is rounded more
+reported as such (disclosed, not fatal), and sessions without a usable or
+plausible adjusted close are excluded visibly. Only real factor mismatches stop
+an import with complete actions. Because limitations are part of the dataset
+hash, re-importing an existing EODHD cache with 0.5.2 yields a new dataset hash. For adjusted values below about 0.1 a 4-decimal series is rounded more
 coarsely than 0.1%, so a small missing dividend there can pass; splits remain
 checked. With actions declared complete, a disagreement stops the import and
 names the ticker and date; with incomplete actions it is recorded as a
@@ -776,7 +780,7 @@ and add `python/quant_core/data/adjustments.py` to this task's `git add`.
 
 - [ ] **Step 6: Final checks**
 
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 636 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 641 tests`, `OK`.
 Run: `grep -n "0.5.1" pyproject.toml python/quant_core/__init__.py` → no output.
 
 - [ ] **Step 7: Commit**
@@ -792,5 +796,5 @@ git commit -m "Document volume basis and adjustment cross-check; version 0.5.2"
 
 - **Spec coverage:** spec Section 5 item 6 — EODHD volume (Tasks 1–2, block chosen; reconstruction deferred and documented), split cross-check against provider adjusted close (Tasks 3–4), heuristic (Task 5); review finding on Parquet `fsync` (Task 6); docs (Task 7). The forward-journal command fix was completed in Plan A.
 - **Placeholders:** none; every code step shows full code.
-- **Consistency:** `RAW_PRICES_SPLIT_ADJUSTED_VOLUME`, `require_raw_volume(metadata, purpose)` with message `"{purpose}: raw share volume required"`, `provider_adjustment_disagreements(observations, actions, tolerance)` returning `AdjustmentDisagreement(session, implied_factor, expected_factor)` are used identically in Tasks 1–4. Test counts: 606 → 607 (T1) → 611 (T2) → 614 (T2 review fixes) → 621 (T3) → 628 (T3 review fixes) → 633 (T4) → 635 (T5) → 636 (T6).
+- **Consistency:** `RAW_PRICES_SPLIT_ADJUSTED_VOLUME`, `require_raw_volume(metadata, purpose)` with message `"{purpose}: raw share volume required"`, `provider_adjustment_disagreements(observations, actions, tolerance)` returning `AdjustmentDisagreement(session, implied_factor, expected_factor)` are used identically in Tasks 1–4. Test counts: 606 → 607 (T1) → 611 (T2) → 614 (T2 review fixes) → 621 (T3) → 628 (T3 review fixes) → 633 (T4) → 635 (T5) → 640 (T4 review fixes) → 641 (T6).
 - **Hash stability:** no new `DataMetadata` field; existing `raw` snapshots keep their dataset hashes (asserted in Task 1).
