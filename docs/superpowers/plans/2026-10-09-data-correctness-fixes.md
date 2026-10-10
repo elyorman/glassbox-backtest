@@ -280,6 +280,8 @@ git commit -m "Refuse split-adjusted EODHD volume in liquidity rules"
 
 ### Task 3: Provider-neutral adjustment cross-check
 
+> **Revised after review:** commit 4da9380 supersedes the code below (tolerance 0.001, series-level rounding unit, `previous_session`/`reason` fields, 14 tests).
+
 **Files:** Modify `python/quant_core/data/adjustments.py`; Create `tests/test_adjustment_crosscheck.py`
 
 - [ ] **Step 1: Write the failing tests** — create `tests/test_adjustment_crosscheck.py`:
@@ -733,7 +735,9 @@ splits and cash dividends: between consecutive sessions the provider's implied
 adjustment must match the declared actions within 0.1% plus half a unit of the
 finest decimal it prints; sessions whose rounding is too coarse to verify are
 reported as such, and sessions without a usable adjusted close are excluded
-visibly. With actions declared complete, a disagreement stops the import and
+visibly. For adjusted values below about 0.1 a 4-decimal series is rounded more
+coarsely than 0.1%, so a small missing dividend there can pass; splits remain
+checked. With actions declared complete, a disagreement stops the import and
 names the ticker and date; with incomplete actions it is recorded as a
 limitation. Missing `adjusted_close` skips the check visibly. Imported snapshots
 carry `adjustment_policy = raw_prices_split_adjusted_volume`; strategies and
@@ -764,6 +768,10 @@ suspicious price flag, including genuine large moves, into an error. See the
 [data-layer quality notes](DATA_LAYER.md#quality-and-persistence).
 ```
 
+- [ ] **Step 4b: Comment fix** — in `python/quant_core/data/adjustments.py` replace the comment on the
+`PRECISION_LIMIT` line with `# Coarser rounding cannot verify even small stock dividends; reported, not trusted.`
+and add `python/quant_core/data/adjustments.py` to this task's `git add`.
+
 - [ ] **Step 5: Version** — set `version = "0.5.2"` in `pyproject.toml` and `__version__ = "0.5.2"` in `python/quant_core/__init__.py`.
 
 - [ ] **Step 6: Final checks**
@@ -774,7 +782,7 @@ Run: `grep -n "0.5.1" pyproject.toml python/quant_core/__init__.py` → no outpu
 - [ ] **Step 7: Commit**
 
 ```bash
-git add docs/DATA_LAYER.md docs/DATA_INTEGRATION.md docs/BACKTESTER.md docs/UNIVERSES.md pyproject.toml python/quant_core/__init__.py
+git add docs/DATA_LAYER.md docs/DATA_INTEGRATION.md docs/BACKTESTER.md docs/UNIVERSES.md pyproject.toml python/quant_core/__init__.py python/quant_core/data/adjustments.py
 git commit -m "Document volume basis and adjustment cross-check; version 0.5.2"
 ```
 
