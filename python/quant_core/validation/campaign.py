@@ -8,7 +8,7 @@ from statistics import median
 from quant_core.analytics import CONTEXT, mean, paired_metrics, return_metrics, summarize_run
 from quant_core.backtest.contracts import RunConfig
 from quant_core.backtest.engine import _engine_hash, run_backtest
-from quant_core.data import Snapshot
+from quant_core.data import Snapshot, require_raw_volume
 from quant_core.data.quality import check_quality
 from quant_core.execution import ExecutionProfile
 from quant_core.provenance import content_hash, primitive
@@ -36,6 +36,7 @@ def _check_data(snapshot, spec, qualification, phase="registration", original=No
         raise ValueError("Dataset qualification is unbound or has unresolved/failed capabilities")
     if not snapshot.metadata.actions_complete:
         raise ValueError("Complete corporate actions required; a declaration alone is not qualification")
+    require_raw_volume(snapshot.metadata, "Campaign strategy liquidity rules")
     if spec.purpose == "engineering_fixture":
         if qualification.scope != "engineering_fixture":
             raise ValueError("Engineering campaigns require engineering qualification")

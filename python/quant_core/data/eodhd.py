@@ -18,7 +18,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from quant_core.data import Bar, DataMetadata, RAW_PRICES_SPLIT_ADJUSTED_VOLUME, Security, Snapshot
+from quant_core.data import Bar, DataMetadata, RAW_PRICES_SPLIT_ADJUSTED_VOLUME, SPLIT_ADJUSTED_VOLUME_LIMITATION, Security, Snapshot
 from quant_core.provenance import canonical_json, content_hash
 
 
@@ -155,7 +155,7 @@ class EodhdJsonSource:
         if reviewed:
             hashes.append(("eodhd:reviewed_actions", self.actions_review_hash))
         limitations = list(self.metadata.limitations)
-        limitations.append("EODHD supplies split-adjusted volume; historical liquidity and dollar-volume qualification requires independent review.")
+        limitations.append(SPLIT_ADJUSTED_VOLUME_LIMITATION)
         limitations.append("Supplied registry/calendar do not establish historical index membership or provider delisting coverage.")
         if not self.metadata.actions_complete:
             limitations.append("Corporate actions are incomplete: bars alone do not establish splits, dividends, payable dates or final delisting outcomes.")

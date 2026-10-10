@@ -50,13 +50,16 @@ class SchemaTests(unittest.TestCase):
                 number(invalid)
 
     def test_split_adjusted_volume_policy_is_explicit_and_blocks_liquidity_rules(self):
-        from quant_core.data import RAW_PRICES_SPLIT_ADJUSTED_VOLUME, require_raw_volume
+        from quant_core.data import RAW_PRICES_SPLIT_ADJUSTED_VOLUME, SPLIT_ADJUSTED_VOLUME_LIMITATION, require_raw_volume
         adjusted = replace(META, adjustment_policy=RAW_PRICES_SPLIT_ADJUSTED_VOLUME)
         self.assertEqual(adjusted.adjustment_policy, "raw_prices_split_adjusted_volume")
         require_raw_volume(META, "Liquidity filter")
         with self.assertRaisesRegex(ValueError, "Liquidity filter: raw share volume required"):
             require_raw_volume(adjusted, "Liquidity filter")
-        self.assertEqual(snapshot().dataset_hash, snapshot(metadata=replace(META)).dataset_hash)
+        self.assertNotEqual(snapshot().dataset_hash, snapshot(metadata=adjusted).dataset_hash)
+        legacy = replace(META, limitations=(SPLIT_ADJUSTED_VOLUME_LIMITATION,))
+        with self.assertRaisesRegex(ValueError, r"EODHD import before 0\.5\.2"):
+            require_raw_volume(legacy, "Liquidity filter")
 
     def test_invalid_ohlc_and_volume_rejected(self):
         for values in (("0", "2", "1", "1", "10"), ("2", "1", "1", "2", "10"),

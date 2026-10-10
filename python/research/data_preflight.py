@@ -69,8 +69,8 @@ def preflight(snapshot, frozen_plan, qualification=None):
     schema = snapshot_payload(snapshot)["schema_version"]
     check("frozen_snapshot_schema", schema == 1,
           "Original runtime accepts JSON schema 1; schema 2 needs explicit compatibility work, never silent approximation", schema)
-    adjusted_volume = (provider.lower() == "eodhd" or any("split-adjusted volume" in s.lower()
-                       for s in snapshot.metadata.limitations))
+    adjusted_volume = (provider.lower() == "eodhd" or snapshot.metadata.adjustment_policy != "raw"
+                       or any("split-adjusted volume" in s.lower() for s in snapshot.metadata.limitations))
     checks["raw_volume_basis"] = dict(status="unresolved" if adjusted_volume else "passed",
         explanation=("Known split-adjusted volume conflicts with historical liquidity/capacity; reviewed reconstruction required"
                      if adjusted_volume else "No declared adjusted-volume conflict; reviewer must evidence actual volume basis"))

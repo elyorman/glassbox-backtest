@@ -120,6 +120,9 @@ class CashDelisting:
 
 RAW_PRICES_SPLIT_ADJUSTED_VOLUME = "raw_prices_split_adjusted_volume"
 ADJUSTMENT_POLICIES = ("raw", RAW_PRICES_SPLIT_ADJUSTED_VOLUME)  # Prices are always raw.
+# Written by the EODHD importer; snapshots imported before 0.5.2 carry it with adjustment_policy="raw".
+SPLIT_ADJUSTED_VOLUME_LIMITATION = ("EODHD supplies split-adjusted volume; historical liquidity and "
+                                    "dollar-volume qualification requires independent review.")
 
 
 @dataclass(frozen=True)
@@ -159,10 +162,14 @@ class DataMetadata:
 
 def require_raw_volume(metadata: DataMetadata, purpose: str) -> None:
     """Liquidity rules count shares in each bar's own units; adjusted volume would double-count splits."""
-    if metadata.adjustment_policy != "raw":
-        raise ValueError(f"{purpose}: raw share volume required, but this snapshot's volume is "
-                         f"split-adjusted (adjustment_policy={metadata.adjustment_policy}); reconstruct raw "
-                         "volume from reviewed complete splits or use a raw-volume source")
+    if metadata.adjustment_policy == "raw" and SPLIT_ADJUSTED_VOLUME_LIMITATION not in metadata.limitations:
+        return
+    basis = (f"split-adjusted (adjustment_policy={metadata.adjustment_policy})"
+             if metadata.adjustment_policy != "raw"
+             else "declared split-adjusted by its source limitations (EODHD import before 0.5.2)")
+    raise ValueError(f"{purpose}: raw share volume required, but this snapshot's volume is {basis}; "
+                     "use a source with unadjusted share volume, or explicit orders without risk limits. "
+                     "Raw-volume reconstruction is not yet supported.")
 
 
 @dataclass(frozen=True)
