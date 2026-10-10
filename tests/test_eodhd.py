@@ -19,6 +19,9 @@ from quant_core.provenance import canonical_json, content_hash
 
 RAW = (b'[{"date":"2024-01-02","open":100.000000000000000000001,'
        b'"high":102,"low":99,"close":101,"adjusted_close":50.5,"volume":1000}]')
+SPLIT_RAW = (b'[{"date":"2024-01-02","open":100,"high":100,"low":100,"close":100,"adjusted_close":50,"volume":1000},'
+             b'{"date":"2024-01-03","open":50.5,"high":50.5,"low":50.5,"close":50.5,"adjusted_close":50.5,"volume":2000}]')
+REVIEW = "a" * 64
 
 
 def source(**changes):
@@ -32,6 +35,35 @@ def source(**changes):
 
 
 class EodhdTests(unittest.TestCase):
+    def test_adjusted_close_confirms_declared_split(self):
+        data = source(responses={"SYNTH.US": SPLIT_RAW}, actions_review_hash=REVIEW,
+                      actions=(Split("ID-1", date(2024, 1, 3), new_shares=2, old_shares=1),),
+                      metadata=replace(source().metadata, actions_complete=True)).load()
+        self.assertFalse(any("adjusted_close" in s for s in data.metadata.limitations))
+
+    def test_declared_complete_actions_missing_a_split_are_refused(self):
+        with self.assertRaisesRegex(ValueError, r"disagree with EODHD adjusted_close: SYNTH\.US .*2024-01-03"):
+            source(responses={"SYNTH.US": SPLIT_RAW}, actions_review_hash=REVIEW,
+                   metadata=replace(source().metadata, actions_complete=True)).load()
+
+    def test_incomplete_actions_record_unexplained_provider_adjustments(self):
+        data = source(responses={"SYNTH.US": SPLIT_RAW}).load()
+        self.assertTrue(any("not explained by supplied actions" in s for s in data.metadata.limitations))
+
+    def test_missing_adjusted_close_skips_crosscheck_visibly(self):
+        raw = SPLIT_RAW.replace(b',"adjusted_close":50,"volume":1000', b',"volume":1000')
+        data = source(responses={"SYNTH.US": raw}).load()
+        self.assertTrue(any("fewer than two usable sessions for SYNTH.US" in s
+                            for s in data.metadata.limitations))
+
+    def test_rows_without_adjusted_close_are_excluded_visibly(self):
+        third = b',{"date":"2024-01-04","open":50,"high":50,"low":50,"close":50,"adjusted_close":50,"volume":2000}]'
+        raw = (SPLIT_RAW[:-1] + third).replace(b'"adjusted_close":50.5,', b'')
+        data = source(responses={"SYNTH.US": raw},
+                      sessions=(date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4))).load()
+        self.assertTrue(any("excluded from the provider adjustment cross-check" in s for s in data.metadata.limitations))
+        self.assertTrue(any("not explained by supplied actions" in s for s in data.metadata.limitations))
+
     def test_raw_ohlc_and_json_decimals_survive_without_adjusted_execution(self):
         data = source().load()
         self.assertEqual(data.bars[0].open, Decimal("100.000000000000000000001"))

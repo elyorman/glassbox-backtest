@@ -18,7 +18,9 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from quant_core.data import Bar, DataMetadata, RAW_PRICES_SPLIT_ADJUSTED_VOLUME, SPLIT_ADJUSTED_VOLUME_LIMITATION, Security, Snapshot
+from quant_core.data import (Bar, DataMetadata, Dividend, RAW_PRICES_SPLIT_ADJUSTED_VOLUME,
+                             SPLIT_ADJUSTED_VOLUME_LIMITATION, Security, Snapshot, Split)
+from quant_core.data.adjustments import provider_adjustment_disagreements
 from quant_core.provenance import canonical_json, content_hash
 
 
@@ -143,14 +145,19 @@ class EodhdJsonSource:
                   ("eodhd:ticker_mapping", content_hash(self.ticker_security_ids)),
                   ("eodhd:actions", content_hash(actions))]
         retrieved_day = self.metadata.retrieved_at.astimezone(timezone.utc).date()
+        provider_closes = []
         for ticker, raw in sorted(self.responses.items()):
             if not isinstance(raw, bytes):
                 raise ValueError("EODHD response must contain original bytes")
+            observed = []
             for index, row in enumerate(_rows(raw), 1):
                 try:
-                    bars.append(_normalized_bar(row, self.ticker_security_ids[ticker], retrieved_day))
+                    bar = _normalized_bar(row, self.ticker_security_ids[ticker], retrieved_day)
                 except (ValueError, TypeError, KeyError, ArithmeticError):
                     raise ValueError(f"Invalid EODHD daily bar at row {index}; check fields and retrieval date") from None
+                bars.append(bar)
+                observed.append((bar.session, bar.close, row.get("adjusted_close")))
+            provider_closes.append((ticker, self.ticker_security_ids[ticker], observed))
             hashes.append(("eodhd:response:" + ticker, sha256(raw).hexdigest()))
         if reviewed:
             hashes.append(("eodhd:reviewed_actions", self.actions_review_hash))
@@ -159,6 +166,8 @@ class EodhdJsonSource:
         limitations.append("Supplied registry/calendar do not establish historical index membership or provider delisting coverage.")
         if not self.metadata.actions_complete:
             limitations.append("Corporate actions are incomplete: bars alone do not establish splits, dividends, payable dates or final delisting outcomes.")
+        for ticker, security_id, observed in provider_closes:
+            limitations.extend(self._adjustment_crosscheck(ticker, security_id, observed, actions))
         metadata = replace(self.metadata, adjustment_policy=RAW_PRICES_SPLIT_ADJUSTED_VOLUME,
                            limitations=tuple(dict.fromkeys(limitations)),
                            input_hashes=tuple(self.metadata.input_hashes) + tuple(hashes))
@@ -170,6 +179,34 @@ class EodhdJsonSource:
             for raw in self.responses.values():
                 _cache_bytes(raw, Path(self.cache_dir))
         return snapshot
+
+    def _adjustment_crosscheck(self, ticker, security_id, observed, actions):
+        """Supplied splits/dividends must explain EODHD's back-adjusted closes; returns limitations."""
+        usable = sorted((day, close, Decimal(adjusted)) for day, close, adjusted in observed
+                        if not isinstance(adjusted, bool) and isinstance(adjusted, (int, Decimal)) and adjusted > 0)
+        if len(usable) < 2:
+            return [f"EODHD adjusted_close has fewer than two usable sessions for {ticker}; "
+                    "provider adjustment cross-check not performed."]
+        if len({day for day, _, _ in usable}) != len(usable):
+            return []  # Snapshot construction reports the duplicate session.
+        notes = []
+        if len(usable) < len(observed):
+            notes.append(f"EODHD adjusted_close is missing or not positive on {len(observed) - len(usable)} "
+                         f"session(s) for {ticker}; they are excluded from the provider adjustment cross-check.")
+        declared = [a for a in actions if isinstance(a, (Split, Dividend)) and a.security_id == security_id]
+        found = provider_adjustment_disagreements(usable, declared)  # Malformed actions are left to Snapshot validation.
+        if found:
+            mismatched = sum(f.reason == "factor_mismatch" for f in found)
+            first = found[0]
+            summary = (f"{ticker} has {mismatched} provider adjustment(s) not explained by supplied actions and "
+                       f"{len(found) - mismatched} session(s) too imprecise to verify (first "
+                       f"{first.session.isoformat()}: {first.reason}, provider factor {first.implied_factor:.6f}, "
+                       f"declared {first.expected_factor:.6f})")
+            if self.metadata.actions_complete:
+                raise ValueError(f"Declared corporate actions disagree with EODHD adjusted_close: {summary}; "
+                                 "review splits and dividends before declaring actions complete")
+            notes.append(f"EODHD adjusted_close: {summary}; corporate actions are incomplete.")
+        return notes
 
 
 class _NoRedirect(HTTPRedirectHandler):
