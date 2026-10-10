@@ -110,6 +110,10 @@ def _publish_bytes(raw: bytes, destination: Path) -> None:
             temporary.unlink(missing_ok=True)
 
 
+# Adjusted/raw ratios outside this range are not plausible price adjustments.
+PLAUSIBLE_ADJUSTMENT = (Decimal("1e-12"), Decimal("1e12"))
+
+
 @dataclass(frozen=True)
 class EodhdJsonSource:
     responses: Mapping[str, bytes] = field(repr=False)
@@ -182,26 +186,41 @@ class EodhdJsonSource:
 
     def _adjustment_crosscheck(self, ticker, security_id, observed, actions):
         """Supplied splits/dividends must explain EODHD's back-adjusted closes; returns limitations."""
-        usable = sorted((day, close, Decimal(adjusted)) for day, close, adjusted in observed
-                        if not isinstance(adjusted, bool) and isinstance(adjusted, (int, Decimal)) and adjusted > 0)
+        low, high = PLAUSIBLE_ADJUSTMENT
+        usable, excluded = [], []
+        for day, close, adjusted in observed:
+            if (not isinstance(adjusted, bool) and isinstance(adjusted, (int, Decimal)) and adjusted > 0
+                    and low <= Decimal(adjusted) / close <= high):
+                usable.append((day, close, Decimal(adjusted)))
+            else:
+                excluded.append(day)
+        usable.sort()
         if len(usable) < 2:
             return [f"EODHD adjusted_close has fewer than two usable sessions for {ticker}; "
                     "provider adjustment cross-check not performed."]
         if len({day for day, _, _ in usable}) != len(usable):
             return []  # Snapshot construction reports the duplicate session.
         notes = []
-        if len(usable) < len(observed):
-            notes.append(f"EODHD adjusted_close is missing or not positive on {len(observed) - len(usable)} "
-                         f"session(s) for {ticker}; they are excluded from the provider adjustment cross-check.")
+        if excluded:
+            notes.append(f"EODHD adjusted_close is missing, non-positive or implausible on {len(excluded)} "
+                         f"session(s) for {ticker} (first {min(excluded).isoformat()}); they are excluded "
+                         "from the provider adjustment cross-check.")
         declared = [a for a in actions if isinstance(a, (Split, Dividend)) and a.security_id == security_id]
-        found = provider_adjustment_disagreements(usable, declared)  # Malformed actions are left to Snapshot validation.
-        if found:
-            mismatched = sum(f.reason == "factor_mismatch" for f in found)
-            first = found[0]
-            summary = (f"{ticker} has {mismatched} provider adjustment(s) not explained by supplied actions and "
-                       f"{len(found) - mismatched} session(s) too imprecise to verify (first "
-                       f"{first.session.isoformat()}: {first.reason}, provider factor {first.implied_factor:.6f}, "
-                       f"declared {first.expected_factor:.6f})")
+        try:
+            found = provider_adjustment_disagreements(usable, declared)  # Malformed actions: Snapshot validation.
+        except ArithmeticError:
+            return notes + [f"EODHD adjusted_close for {ticker} could not be compared numerically; "
+                            "provider adjustment cross-check not performed."]
+        mismatches = [f for f in found if f.reason == "factor_mismatch"]
+        imprecise = len(found) - len(mismatches)
+        if imprecise:
+            notes.append(f"EODHD adjusted_close for {ticker} is too coarsely rounded to verify {imprecise} "
+                         "session pair(s); splits and dividends there are unchecked.")
+        if mismatches:
+            first = mismatches[0]
+            summary = (f"{ticker} has {len(mismatches)} provider adjustment(s) not explained by supplied actions "
+                       f"(first {first.previous_session.isoformat()} to {first.session.isoformat()}: "
+                       f"provider factor {first.implied_factor:.6g}, declared {first.expected_factor:.6g})")
             if self.metadata.actions_complete:
                 raise ValueError(f"Declared corporate actions disagree with EODHD adjusted_close: {summary}; "
                                  "review splits and dividends before declaring actions complete")

@@ -23,6 +23,15 @@ SPLIT_RAW = (b'[{"date":"2024-01-02","open":100,"high":100,"low":100,"close":100
              b'{"date":"2024-01-03","open":50.5,"high":50.5,"low":50.5,"close":50.5,"adjusted_close":50.5,"volume":2000}]')
 REVIEW = "a" * 64
 
+DAYS3 = (date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4))
+
+
+def response(*rows):
+    """EODHD-style JSON with literal numbers; `adjusted` is inserted verbatim (may be any JSON value)."""
+    body = ",".join(f'{{"date":"{day}","open":{close},"high":{close},"low":{close},"close":{close},'
+                    f'"adjusted_close":{adjusted},"volume":1000}}' for day, close, adjusted in rows)
+    return ("[" + body + "]").encode()
+
 
 def source(**changes):
     values = dict(responses={"SYNTH.US": RAW}, ticker_security_ids={"SYNTH.US": "ID-1"},
@@ -63,6 +72,50 @@ class EodhdTests(unittest.TestCase):
                       sessions=(date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4))).load()
         self.assertTrue(any("excluded from the provider adjustment cross-check" in s for s in data.metadata.limitations))
         self.assertTrue(any("not explained by supplied actions" in s for s in data.metadata.limitations))
+
+    def test_complete_actions_must_include_dividends_the_provider_applied(self):
+        raw = response(("2024-01-02", 100, 98), ("2024-01-03", 99, 99))
+        dividend = Dividend("ID-1", date(2024, 1, 3), "2", date(2024, 1, 3))
+        complete = replace(source().metadata, actions_complete=True)
+        source(responses={"SYNTH.US": raw}, actions=(dividend,), actions_review_hash=REVIEW, metadata=complete).load()
+        with self.assertRaisesRegex(ValueError, "2024-01-02 to 2024-01-03"):
+            source(responses={"SYNTH.US": raw}, actions_review_hash=REVIEW, metadata=complete).load()
+
+    def test_each_ticker_is_checked_against_its_own_actions(self):
+        responses = {"SYNTH.US": SPLIT_RAW, "OTHER.US": response(("2024-01-02", 100, 100), ("2024-01-03", 101, 101))}
+        ids = {"SYNTH.US": "ID-1", "OTHER.US": "ID-2"}
+        securities = (Security("ID-1", "SYNTH", "XNAS"), Security("ID-2", "OTHER", "XNAS"))
+        complete = replace(source().metadata, actions_complete=True)
+
+        def load(split_owner):
+            split = Split(split_owner, date(2024, 1, 3), new_shares=2, old_shares=1)
+            return source(responses=responses, ticker_security_ids=ids, securities=securities,
+                          actions=(split,), actions_review_hash=REVIEW, metadata=complete).load()
+
+        load("ID-1")
+        with self.assertRaisesRegex(ValueError, r"OTHER\.US"):
+            load("ID-2")
+
+    def test_unusable_adjusted_values_are_excluded_not_trusted(self):
+        for bad in ("0", "-5", '"50"', "true", "1E+999999", "1E-999999"):
+            with self.subTest(bad=bad):
+                raw = response(("2024-01-02", 100, 50), ("2024-01-03", 50.5, bad), ("2024-01-04", 50, 50))
+                notes = source(responses={"SYNTH.US": raw}, sessions=DAYS3).load().metadata.limitations
+                self.assertTrue(any("excluded from the provider adjustment cross-check" in s for s in notes))
+                self.assertTrue(any("not explained by supplied actions" in s for s in notes))
+                self.assertTrue(all(len(s) < 400 for s in notes))
+
+    def test_too_coarse_provider_rounding_is_disclosed_not_fatal(self):
+        raw = response(("2024-01-02", 100, 0.0001), ("2024-01-03", 50, 0.0001))
+        split = Split("ID-1", date(2024, 1, 3), new_shares=2, old_shares=1)
+        data = source(responses={"SYNTH.US": raw}, actions=(split,), actions_review_hash=REVIEW,
+                      metadata=replace(source().metadata, actions_complete=True)).load()
+        self.assertTrue(any("too coarsely rounded to verify 1 session pair" in s for s in data.metadata.limitations))
+
+    def test_duplicate_sessions_report_the_snapshot_contract_error(self):
+        raw = response(("2024-01-02", 100, 50), ("2024-01-02", 100, 50))
+        with self.assertRaisesRegex(ValueError, "violates supplied calendar"):
+            source(responses={"SYNTH.US": raw}).load()
 
     def test_raw_ohlc_and_json_decimals_survive_without_adjusted_execution(self):
         data = source().load()
