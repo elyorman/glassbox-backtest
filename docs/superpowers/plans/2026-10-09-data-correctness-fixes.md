@@ -422,7 +422,7 @@ def _half_unit(value):
 - [ ] **Step 4: Run the new tests and the full suite** (checks there is no import cycle)
 
 Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_adjustment_crosscheck -v 2>&1 | tail -3` → `OK` (7 tests).
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 621 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 628 tests`, `OK`.
 
 - [ ] **Step 5: Commit**
 
@@ -466,14 +466,22 @@ and add these methods to `EodhdTests`:
     def test_missing_adjusted_close_skips_crosscheck_visibly(self):
         raw = SPLIT_RAW.replace(b',"adjusted_close":50,"volume":1000', b',"volume":1000')
         data = source(responses={"SYNTH.US": raw}).load()
-        self.assertTrue(any("adjusted_close is missing or invalid for SYNTH.US" in s
+        self.assertTrue(any("fewer than two usable sessions for SYNTH.US" in s
                             for s in data.metadata.limitations))
+
+    def test_rows_without_adjusted_close_are_excluded_visibly(self):
+        third = b',{"date":"2024-01-04","open":50,"high":50,"low":50,"close":50,"adjusted_close":50,"volume":2000}]'
+        raw = (SPLIT_RAW[:-1] + third).replace(b'"adjusted_close":50.5,', b'')
+        data = source(responses={"SYNTH.US": raw},
+                      sessions=(date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4))).load()
+        self.assertTrue(any("excluded from the provider adjustment cross-check" in s for s in data.metadata.limitations))
+        self.assertTrue(any("not explained by supplied actions" in s for s in data.metadata.limitations))
 ```
 
 - [ ] **Step 2: Run and confirm failures**
 
 Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_eodhd -v 2>&1 | tail -3`
-Expected: `FAILED` — the refusal, incomplete-actions and missing-field tests fail (the confirming test already passes).
+Expected: `FAILED` — the refusal, incomplete-actions, missing-field and excluded-rows tests fail (the confirming test already passes).
 
 - [ ] **Step 3: Implement** — in `python/quant_core/data/eodhd.py`:
 
@@ -527,41 +535,45 @@ Then, directly after the existing `if not self.metadata.actions_complete:` limit
 
 ```python
         for ticker, security_id, observed in provider_closes:
-            limitation = self._adjustment_crosscheck(ticker, security_id, observed, actions)
-            if limitation:
-                limitations.append(limitation)
+            limitations.extend(self._adjustment_crosscheck(ticker, security_id, observed, actions))
 ```
 
 and add this method to `EodhdJsonSource` after `load`:
 
 ```python
     def _adjustment_crosscheck(self, ticker, security_id, observed, actions):
-        """Supplied splits/dividends must explain EODHD's back-adjusted closes."""
-        if any(isinstance(adjusted, bool) or not isinstance(adjusted, (int, Decimal)) or adjusted <= 0
-               for _, _, adjusted in observed):
-            return (f"EODHD adjusted_close is missing or invalid for {ticker}; "
-                    "provider adjustment cross-check not performed.")
-        rows = sorted((day, close, Decimal(adjusted)) for day, close, adjusted in observed)
-        if len({day for day, _, _ in rows}) != len(rows):
-            return None  # Snapshot construction reports the duplicate session.
+        """Supplied splits/dividends must explain EODHD's back-adjusted closes; returns limitations."""
+        usable = sorted((day, close, Decimal(adjusted)) for day, close, adjusted in observed
+                        if not isinstance(adjusted, bool) and isinstance(adjusted, (int, Decimal)) and adjusted > 0)
+        if len(usable) < 2:
+            return [f"EODHD adjusted_close has fewer than two usable sessions for {ticker}; "
+                    "provider adjustment cross-check not performed."]
+        if len({day for day, _, _ in usable}) != len(usable):
+            return []  # Snapshot construction reports the duplicate session.
+        notes = []
+        if len(usable) < len(observed):
+            notes.append(f"EODHD adjusted_close is missing or not positive on {len(observed) - len(usable)} "
+                         f"session(s) for {ticker}; they are excluded from the provider adjustment cross-check.")
         declared = [a for a in actions if isinstance(a, (Split, Dividend)) and a.security_id == security_id]
-        found = provider_adjustment_disagreements(rows, declared)  # Malformed actions are left to Snapshot validation.
-        if not found:
-            return None
-        first = found[0]
-        summary = (f"{ticker} has {len(found)} provider adjustment(s) not explained by supplied actions "
-                   f"(first {first.session.isoformat()}: provider factor {first.implied_factor:.6f}, "
-                   f"declared {first.expected_factor:.6f})")
-        if self.metadata.actions_complete:
-            raise ValueError(f"Declared corporate actions disagree with EODHD adjusted_close: {summary}; "
-                             "review splits and dividends before declaring actions complete")
-        return f"EODHD adjusted_close: {summary}; corporate actions are incomplete."
+        found = provider_adjustment_disagreements(usable, declared)  # Malformed actions are left to Snapshot validation.
+        if found:
+            mismatched = sum(f.reason == "factor_mismatch" for f in found)
+            first = found[0]
+            summary = (f"{ticker} has {mismatched} provider adjustment(s) not explained by supplied actions and "
+                       f"{len(found) - mismatched} session(s) too imprecise to verify (first "
+                       f"{first.session.isoformat()}: {first.reason}, provider factor {first.implied_factor:.6f}, "
+                       f"declared {first.expected_factor:.6f})")
+            if self.metadata.actions_complete:
+                raise ValueError(f"Declared corporate actions disagree with EODHD adjusted_close: {summary}; "
+                                 "review splits and dividends before declaring actions complete")
+            notes.append(f"EODHD adjusted_close: {summary}; corporate actions are incomplete.")
+        return notes
 ```
 
 - [ ] **Step 4: Run EODHD tests and the full suite**
 
 Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_eodhd tests.test_data_commands tests.test_universe_strategy tests.test_volume_basis -v 2>&1 | tail -3` → `OK`.
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 625 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 633 tests`, `OK`.
 
 - [ ] **Step 5: Commit**
 
@@ -622,7 +634,7 @@ with
 - [ ] **Step 4: Run quality tests and the full suite**
 
 Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_audit_quality tests.test_data -v 2>&1 | tail -3` → `OK`.
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 627 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 635 tests`, `OK`.
 
 - [ ] **Step 5: Commit**
 
@@ -677,7 +689,7 @@ to
 - [ ] **Step 4: Run Parquet tests and the full suite**
 
 Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_parquet -v 2>&1 | tail -3` → `OK`.
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 628 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 636 tests`, `OK`.
 
 - [ ] **Step 5: Commit**
 
@@ -718,8 +730,10 @@ date. Explicit order schedules without risk limits still run.
 Adjusted close remains in original response bytes and is never an execution
 price or signal series. The importer uses it only to cross-check supplied
 splits and cash dividends: between consecutive sessions the provider's implied
-adjustment must match the declared actions within 1% plus its last-digit
-rounding. With actions declared complete, a disagreement stops the import and
+adjustment must match the declared actions within 0.1% plus half a unit of the
+finest decimal it prints; sessions whose rounding is too coarse to verify are
+reported as such, and sessions without a usable adjusted close are excluded
+visibly. With actions declared complete, a disagreement stops the import and
 names the ticker and date; with incomplete actions it is recorded as a
 limitation. Missing `adjusted_close` skips the check visibly. Imported snapshots
 carry `adjustment_policy = raw_prices_split_adjusted_volume`; strategies and
@@ -754,7 +768,7 @@ suspicious price flag, including genuine large moves, into an error. See the
 
 - [ ] **Step 6: Final checks**
 
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 628 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 636 tests`, `OK`.
 Run: `grep -n "0.5.1" pyproject.toml python/quant_core/__init__.py` → no output.
 
 - [ ] **Step 7: Commit**
@@ -770,5 +784,5 @@ git commit -m "Document volume basis and adjustment cross-check; version 0.5.2"
 
 - **Spec coverage:** spec Section 5 item 6 — EODHD volume (Tasks 1–2, block chosen; reconstruction deferred and documented), split cross-check against provider adjusted close (Tasks 3–4), heuristic (Task 5); review finding on Parquet `fsync` (Task 6); docs (Task 7). The forward-journal command fix was completed in Plan A.
 - **Placeholders:** none; every code step shows full code.
-- **Consistency:** `RAW_PRICES_SPLIT_ADJUSTED_VOLUME`, `require_raw_volume(metadata, purpose)` with message `"{purpose}: raw share volume required"`, `provider_adjustment_disagreements(observations, actions, tolerance)` returning `AdjustmentDisagreement(session, implied_factor, expected_factor)` are used identically in Tasks 1–4. Test counts: 606 → 607 (T1) → 611 (T2) → 614 (T2 review fixes) → 621 (T3) → 625 (T4) → 627 (T5) → 628 (T6).
+- **Consistency:** `RAW_PRICES_SPLIT_ADJUSTED_VOLUME`, `require_raw_volume(metadata, purpose)` with message `"{purpose}: raw share volume required"`, `provider_adjustment_disagreements(observations, actions, tolerance)` returning `AdjustmentDisagreement(session, implied_factor, expected_factor)` are used identically in Tasks 1–4. Test counts: 606 → 607 (T1) → 611 (T2) → 614 (T2 review fixes) → 621 (T3) → 628 (T3 review fixes) → 633 (T4) → 635 (T5) → 636 (T6).
 - **Hash stability:** no new `DataMetadata` field; existing `raw` snapshots keep their dataset hashes (asserted in Task 1).
