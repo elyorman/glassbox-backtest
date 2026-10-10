@@ -78,9 +78,11 @@ def check_quality(snapshot: Snapshot, jump_threshold="0.50", *, strict_discontin
                         continue
                     relative = bar.open / reference
                     jump = abs(relative - 1)
-                    common_factors = (Decimal(1) / 2, Decimal(2) / 3, Decimal(4) / 5,
-                                      Decimal(5) / 4, Decimal(3) / 2, Decimal(2))
-                    suspicious = any(abs(relative / factor - 1) <= Decimal("0.005")
+                    # Sensitivity over specificity: a missed split corrupts every later mark,
+                    # while a flagged genuine move only needs review. 3% covers ordinary gaps.
+                    common_factors = (Decimal(1) / 2, Decimal(2) / 3, Decimal(3) / 4, Decimal(4) / 5,
+                                      Decimal(5) / 4, Decimal(4) / 3, Decimal(3) / 2, Decimal(2))
+                    suspicious = any(abs(relative / factor - 1) <= Decimal("0.03")
                                      for factor in common_factors)
                 severity = "error" if strict_discontinuities else "warning"
                 if jump >= threshold:

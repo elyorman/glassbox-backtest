@@ -32,6 +32,20 @@ class AuditQualityTests(unittest.TestCase):
                 self.assertEqual(data.bars[0].close, fixtures.Decimal(before))
                 self.assertEqual(data.actions, ())
 
+    def test_split_sized_changes_with_ordinary_gaps_are_flagged(self):
+        for before, after in (("100", "50.5"), ("150", "101"), ("150", "99"), ("125", "101"), ("100", "75")):
+            with self.subTest(before=before, after=after):
+                data = fixtures.snapshot(tuple(fixtures.bar(day, before if i == 0 else after)
+                                               for i, day in enumerate(fixtures.DAYS)))
+                self.assertIn("suspected_missing_split", [i.code for i in check_quality(data).issues])
+
+    def test_ordinary_moves_away_from_split_ratios_are_not_flagged(self):
+        for before, after in (("100", "90"), ("100", "110"), ("100", "60")):
+            with self.subTest(before=before, after=after):
+                data = fixtures.snapshot(tuple(fixtures.bar(day, before if i == 0 else after)
+                                               for i, day in enumerate(fixtures.DAYS)))
+                self.assertNotIn("suspected_missing_split", [i.code for i in check_quality(data).issues])
+
     def test_exact_jump_threshold_is_inclusive(self):
         data = fixtures.snapshot(tuple(fixtures.bar(day, "200" if i == 0 else "100")
                                        for i, day in enumerate(fixtures.DAYS)))
