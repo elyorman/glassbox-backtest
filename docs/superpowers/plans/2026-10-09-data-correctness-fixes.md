@@ -10,6 +10,8 @@
 
 **Design approval:** 2026-10-09 (block adjusted volume now; raw-volume reconstruction deferred to the EODHD customer-adapter work; Alpaca split-adjusted cross-check deferred to Plan E data collection).
 
+**Test commands:** single-module runs need `tests/` on the path because some tests import sibling test modules: use `PYTHONPATH=python:tests` wherever a step names a module (e.g. `tests.test_audit_quality`). `discover -s tests` already does this.
+
 **Repo rules:** commit after each task with the given message (no ticket IDs, no co-author trailers; a local hook rejects them). Never stage anything under `local/`. Run tests from the repo root with `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest ...`. Baseline: 606 tests pass.
 
 **Prototype evidence:** applying these changes to a scratch copy, the only existing test that changes outcome is `test_universe_strategy.test_original_provider_response_to_parquet_to_dated_portfolio`, which ran a strategy on EODHD volume (the bug itself). Task 2 rewrites it.
@@ -420,7 +422,7 @@ def _half_unit(value):
 - [ ] **Step 4: Run the new tests and the full suite** (checks there is no import cycle)
 
 Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_adjustment_crosscheck -v 2>&1 | tail -3` → `OK` (7 tests).
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 618 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 621 tests`, `OK`.
 
 - [ ] **Step 5: Commit**
 
@@ -475,7 +477,14 @@ Expected: `FAILED` — the refusal, incomplete-actions and missing-field tests f
 
 - [ ] **Step 3: Implement** — in `python/quant_core/data/eodhd.py`:
 
-Change the import line to `from quant_core.data import Bar, DataMetadata, Dividend, RAW_PRICES_SPLIT_ADJUSTED_VOLUME, Security, Snapshot, Split` and add directly below it:
+Change the import line (after the Task 2 review fix it reads `from quant_core.data import Bar, DataMetadata, RAW_PRICES_SPLIT_ADJUSTED_VOLUME, SPLIT_ADJUSTED_VOLUME_LIMITATION, Security, Snapshot`) to
+
+```python
+from quant_core.data import (Bar, DataMetadata, Dividend, RAW_PRICES_SPLIT_ADJUSTED_VOLUME,
+                             SPLIT_ADJUSTED_VOLUME_LIMITATION, Security, Snapshot, Split)
+```
+
+and add directly below it:
 
 ```python
 from quant_core.data.adjustments import provider_adjustment_disagreements
@@ -552,7 +561,7 @@ and add this method to `EodhdJsonSource` after `load`:
 - [ ] **Step 4: Run EODHD tests and the full suite**
 
 Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_eodhd tests.test_data_commands tests.test_universe_strategy tests.test_volume_basis -v 2>&1 | tail -3` → `OK`.
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 622 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 625 tests`, `OK`.
 
 - [ ] **Step 5: Commit**
 
@@ -613,7 +622,7 @@ with
 - [ ] **Step 4: Run quality tests and the full suite**
 
 Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_audit_quality tests.test_data -v 2>&1 | tail -3` → `OK`.
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 624 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 627 tests`, `OK`.
 
 - [ ] **Step 5: Commit**
 
@@ -668,7 +677,7 @@ to
 - [ ] **Step 4: Run Parquet tests and the full suite**
 
 Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_parquet -v 2>&1 | tail -3` → `OK`.
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 625 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 628 tests`, `OK`.
 
 - [ ] **Step 5: Commit**
 
@@ -715,7 +724,11 @@ names the ticker and date; with incomplete actions it is recorded as a
 limitation. Missing `adjusted_close` skips the check visibly. Imported snapshots
 carry `adjustment_policy = raw_prices_split_adjusted_volume`; strategies and
 risk-enabled runs refuse them until raw volume is reconstructed from reviewed
-complete splits (not yet implemented).
+complete splits (not yet implemented). EODHD snapshots imported before 0.5.2
+are labelled `raw` but carry the importer's split-adjusted-volume limitation;
+they are refused the same way. Re-import them from the raw response cache. CSV
+imports cannot yet declare a split-adjusted volume basis; that option is
+planned before customer CSV import ships.
 ```
 
 - [ ] **Step 3: `docs/BACKTESTER.md`** — after the sentence that ends `requested strict discontinuity check.` add:
@@ -738,7 +751,7 @@ suspicious price flag, including genuine large moves, into an error. See the
 
 - [ ] **Step 6: Final checks**
 
-Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 625 tests`, `OK`.
+Run: `PYTHONPATH=python PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -3` → `Ran 628 tests`, `OK`.
 Run: `grep -n "0.5.1" pyproject.toml python/quant_core/__init__.py` → no output.
 
 - [ ] **Step 7: Commit**
@@ -754,5 +767,5 @@ git commit -m "Document volume basis and adjustment cross-check; version 0.5.2"
 
 - **Spec coverage:** spec Section 5 item 6 — EODHD volume (Tasks 1–2, block chosen; reconstruction deferred and documented), split cross-check against provider adjusted close (Tasks 3–4), heuristic (Task 5); review finding on Parquet `fsync` (Task 6); docs (Task 7). The forward-journal command fix was completed in Plan A.
 - **Placeholders:** none; every code step shows full code.
-- **Consistency:** `RAW_PRICES_SPLIT_ADJUSTED_VOLUME`, `require_raw_volume(metadata, purpose)` with message `"{purpose}: raw share volume required"`, `provider_adjustment_disagreements(observations, actions, tolerance)` returning `AdjustmentDisagreement(session, implied_factor, expected_factor)` are used identically in Tasks 1–4. Test counts: 606 → 607 (T1) → 611 (T2) → 618 (T3) → 622 (T4) → 624 (T5) → 625 (T6).
+- **Consistency:** `RAW_PRICES_SPLIT_ADJUSTED_VOLUME`, `require_raw_volume(metadata, purpose)` with message `"{purpose}: raw share volume required"`, `provider_adjustment_disagreements(observations, actions, tolerance)` returning `AdjustmentDisagreement(session, implied_factor, expected_factor)` are used identically in Tasks 1–4. Test counts: 606 → 607 (T1) → 611 (T2) → 614 (T2 review fixes) → 621 (T3) → 625 (T4) → 627 (T5) → 628 (T6).
 - **Hash stability:** no new `DataMetadata` field; existing `raw` snapshots keep their dataset hashes (asserted in Task 1).
