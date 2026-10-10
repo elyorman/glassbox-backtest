@@ -17,8 +17,29 @@ split-adjusted `volume`. The adapter uses the raw OHLC fields for execution and
 retains provider volume unchanged. Every imported snapshot discloses that
 historical liquidity and dollar-volume qualification need independent review.
 It does not silently reconstruct historical volume from an incomplete action
-history. Adjusted close remains in original response bytes and is not an
-execution price or an automatically built signal series.
+history. Adjusted close remains in original response bytes and is never an execution
+price or signal series. The importer uses it only to cross-check supplied
+splits and cash dividends: between consecutive sessions the provider's implied
+adjustment must match the declared actions within 0.1% plus half a unit of the
+finest decimal it prints; sessions whose rounding is too coarse to verify are
+reported as such (disclosed, not fatal), and sessions without a usable or
+plausible adjusted close are excluded visibly. Only real factor mismatches stop
+an import with complete actions. Because limitations are part of the dataset
+hash, re-importing an existing EODHD cache with 0.5.2 yields a new dataset hash. For adjusted values below about 0.1 a 4-decimal series is rounded more
+coarsely than 0.1%, so a small missing dividend there can pass; splits remain
+checked. With actions declared complete, a disagreement stops the import and
+names the ticker and date; with incomplete actions it is recorded as a
+limitation. Missing `adjusted_close` skips the check visibly. Imported snapshots
+carry `adjustment_policy = raw_prices_split_adjusted_volume`; strategies and
+risk-enabled runs refuse them until raw volume is reconstructed from reviewed
+complete splits (not yet implemented). EODHD snapshots imported before 0.5.2
+are labelled `raw` but carry the importer's split-adjusted-volume limitation;
+they are refused the same way. Re-import them from the raw response cache. CSV
+imports cannot yet declare a split-adjusted volume basis; that option is
+planned before customer CSV import ships. The guard runs in strategy and campaign
+preflight and risk-enabled runs; a future scanner or any direct caller of
+`RuleStrategy.evaluate()` must call `require_raw_volume` itself, and custom
+order sources cannot yet see the volume basis through `SessionContext`.
 
 An explicit calendar and stable security registry must come from reviewed
 inputs. Ticker-to-security mapping is supplied separately; dates or current

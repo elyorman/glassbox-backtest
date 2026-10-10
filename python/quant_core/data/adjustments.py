@@ -60,7 +60,7 @@ def normalized_history(bars, splits):
     return tuple(result)
 
 
-PRECISION_LIMIT = Decimal("0.05")  # Rounding that could hide a 5:4 split cannot verify anything.
+PRECISION_LIMIT = Decimal("0.05")  # Coarser rounding cannot verify even small stock dividends; reported, not trusted.
 
 
 @dataclass(frozen=True)

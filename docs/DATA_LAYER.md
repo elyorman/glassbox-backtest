@@ -52,11 +52,21 @@ The bundled CSV fixture is entirely synthetic. Its first asset has a 2:1 split, 
 
 Missing bars during an expected lifetime are errors. An entirely absent registered security is detected. Zero-volume bars, large raw opening discontinuities after accounting for known splits and dividend ex-dates, unresolved delisting settlement, declared incomplete corporate actions, and supplied limitations are reported without repairing observations.
 
-The jump threshold is inclusive. The checker also flags observations near common
-split ratios after adjusting for known actions. These are review prompts, not
-inferred splits. `check_quality(..., strict_discontinuities=True)` or the data
-CLI's `--strict-discontinuities` makes these unresolved discontinuities errors.
-The default warning policy remains explicit and compatible with older diagnostics.
+The jump threshold is inclusive. The checker also flags opening prices within 3%
+of common split ratios (1:2, 2:3, 3:4, 4:5 and their inverses) after adjusting
+for known actions, so missed splits with ordinary opening gaps are caught. These
+are review prompts, not inferred splits, and genuine large moves near those
+ratios are flagged too. `check_quality(..., strict_discontinuities=True)` or the
+data CLI's `--strict-discontinuities` makes every flag an error; use it for
+short, reviewed histories. For long histories prefer a provider adjustment
+cross-check (see [data integration](DATA_INTEGRATION.md)) and review warnings.
+
+`DataMetadata.adjustment_policy` states the volume basis; prices are always raw.
+`raw` means raw share volume. `raw_prices_split_adjusted_volume` (set by the
+EODHD importer) means volume already reflects later splits: strategies and
+risk-enabled backtests refuse such snapshots, because their liquidity filters and
+participation caps would double-count splits and see splits after the signal
+date. Explicit order schedules without risk limits still run.
 Known dividends subtract from the comparison reference after same-day splits,
 in post-split units. If distributions exhaust that reference, the percentage-gap
 check is undefined and a warning states that limitation; raw bars stay unchanged.

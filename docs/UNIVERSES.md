@@ -154,6 +154,10 @@ PYTHONPATH=python .venv/bin/python -m quant_core.backtest.cli verify \
   local/dated-backtest-v1
 ```
 
+`--strict-discontinuities` suits short, reviewed snapshots: it turns every
+suspicious price flag, including genuine large moves, into an error. See the
+[data-layer quality notes](DATA_LAYER.md#quality-and-persistence).
+
 These commands require reviewed complete actions by default. The synthetic
 provider-to-Parquet-to-membership integration test is an explicitly incomplete-
 action diagnostic; it does not weaken the normal execution gate.

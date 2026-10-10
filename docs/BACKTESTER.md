@@ -135,6 +135,9 @@ policy is recorded in the run configuration; it defaults to false for older
 diagnostic semantics.
 `--allow-missing-unheld` exempts only missing bars; it does not bypass a separately
 requested strict discontinuity check.
+Rule strategies and risk-enabled runs also require raw share volume
+(`adjustment_policy = raw`); snapshots with split-adjusted volume are refused
+with an explanatory error rather than silently mixing share bases.
 
 These are developer entry points. The eventual desktop uses the same API and requires no customer terminal. A benchmark can run independently with a different security universe and order source; automatic benchmark construction/comparison and full analytics are later work.
 
