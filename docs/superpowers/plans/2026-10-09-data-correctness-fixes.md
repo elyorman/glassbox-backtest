@@ -728,7 +728,10 @@ complete splits (not yet implemented). EODHD snapshots imported before 0.5.2
 are labelled `raw` but carry the importer's split-adjusted-volume limitation;
 they are refused the same way. Re-import them from the raw response cache. CSV
 imports cannot yet declare a split-adjusted volume basis; that option is
-planned before customer CSV import ships.
+planned before customer CSV import ships. The guard runs in strategy and campaign
+preflight and risk-enabled runs; a future scanner or any direct caller of
+`RuleStrategy.evaluate()` must call `require_raw_volume` itself, and custom
+order sources cannot yet see the volume basis through `SessionContext`.
 ```
 
 - [ ] **Step 3: `docs/BACKTESTER.md`** — after the sentence that ends `requested strict discontinuity check.` add:
