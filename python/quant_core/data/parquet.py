@@ -66,7 +66,7 @@ def save_parquet_snapshot(snapshot: Snapshot, path: Path) -> None:
         bar_path = staging / "bars.parquet"
         table = pa.Table.from_pylist(rows, schema=_bar_schema(pa))
         pq.write_table(table, bar_path, compression="zstd")
-        with bar_path.open("rb") as stream:
+        with bar_path.open("r+b") as stream:  # Windows requires write access to flush to disk.
             os.fsync(stream.fileno())
         raw = bar_path.read_bytes()
         manifest = {"schema_version": 1, "dataset_hash": snapshot.dataset_hash,

@@ -5,6 +5,7 @@ from decimal import Decimal
 from hashlib import sha256
 import importlib.util
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -47,6 +48,20 @@ class DependencyTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec("pyarrow"), "optional pyarrow not installed")
 class ParquetTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "access-mode probe uses POSIX fcntl")
+    def test_durability_sync_uses_writable_descriptors(self):
+        import fcntl
+        from quant_core.data import parquet
+        real_fsync = os.fsync
+
+        def checked(descriptor):
+            if fcntl.fcntl(descriptor, fcntl.F_GETFL) & os.O_ACCMODE == os.O_RDONLY:
+                raise AssertionError("fsync on a read-only descriptor fails on Windows")
+            return real_fsync(descriptor)
+
+        with TemporaryDirectory() as folder, patch.object(parquet.os, "fsync", side_effect=checked):
+            save_parquet_snapshot(snapshot(), Path(folder) / "bundle")
+
     def test_exact_decimal_roundtrip_and_original_dataset_hash_with_json_compatibility(self):
         import pyarrow.parquet as pq
         data = snapshot()
