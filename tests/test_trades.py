@@ -16,10 +16,10 @@ META = DataMetadata("synthetic", datetime(2024, 1, 20, tzinfo=timezone.utc),
 D = (date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4), date(2024, 1, 5), date(2024, 1, 8), date(2024, 1, 9))
 
 
-def bar(day, open_, close=None, low=None):
+def bar(day, open_, close=None, low=None, asset="A"):
     close = open_ if close is None else close
     o, c = Decimal(open_), Decimal(close)
-    return Bar("A", day, o, max(o, c), Decimal(low) if low else min(o, c), c, "1000")
+    return Bar(asset, day, o, max(o, c), Decimal(low) if low else min(o, c), c, "1000")
 
 
 def order(day, side, quantity, reason="test_input", stop=None):
@@ -50,15 +50,33 @@ class RoundTripTests(unittest.TestCase):
                          (101, 119, 0, 2, 0))
         self.assertEqual((trade.realized_pnl, trade.unrealized_pnl, trade.total_pnl), (18, 0, 18))
         self.assertEqual(trade.return_on_cost, Decimal(18) / 101)
-        self.assertEqual(trade.holding_days, 1)
+        self.assertEqual((trade.holding_days, trade.fill_ids), (1, ("fill-000001", "fill-000002")))
+
+    def test_slippage_fees_and_order_across_securities(self):
+        bars = [bar(day, "20", asset="B") for day in D[:4]]
+        bars += [bar(D[0], "10"), bar(D[1], "10"), bar(D[2], "10"), bar(D[3], "12")]
+        data = Snapshot(D[:4], tuple(bars), META, (Security("A", "AAA", "SYNTHETIC"), Security("B", "BBB", "SYNTHETIC")))
+        schedule = OrderSchedule((ScheduledOrder(D[0], OrderRequest("B", "buy", "10", reason="enter_b")),
+                                  order(D[1], "buy", "10", "enter_a"), order(D[2], "sell", "10", "leave_a")))
+        result = run_backtest(data, schedule, RunConfig("1000", ExecutionProfile("10", fee_bps="10")))
+        b, a = round_trips(result)
+        # B opened first and is still open: 10 at 20.02 plus 0.2002 fee, marked at 20.
+        self.assertEqual((b.trade_id, b.security_id, b.status, b.entry_reason), ("trade-000001", "B", "open", "enter_b"))
+        self.assertEqual((b.cost_basis, b.unrealized_pnl, b.fill_ids), (Decimal("200.4002"), Decimal("-0.4002"),
+                                                                         ("fill-000001",)))
+        # A: buy 10 at 10.01 plus 0.1001 fee; sell 10 at 11.988 less 0.11988 fee.
+        self.assertEqual((a.trade_id, a.status, a.fill_ids), ("trade-000002", "closed", ("fill-000002", "fill-000003")))
+        self.assertEqual((a.cost_basis, a.proceeds, a.fees, a.slippage, a.realized_pnl),
+                         (Decimal("100.2001"), Decimal("119.76012"), Decimal("0.21998"), Decimal("0.22"),
+                          Decimal("19.56002")))
 
     def test_partial_sale_add_and_dividend_stay_in_one_trade(self):
         bars = [bar(D[0], "10"), bar(D[1], "10"), bar(D[2], "10"), bar(D[3], "11"), bar(D[4], "12"), bar(D[5], "13")]
-        result = run(bars, [(D[0], "buy", "10"), (D[2], "sell", "4"), (D[3], "buy", "2"), (D[4], "sell", "8")],
+        result = run(bars, [(D[0], "buy", "10"), (D[2], "sell", "4"), (D[3], "buy", "2", "add"), (D[4], "sell", "8")],
                      actions=(Dividend("A", D[2], "0.5", D[2]),))
         (trade,) = round_trips(result)
         # Cost 100 + 24; proceeds 44 + 104; dividend 10 x 0.5; realized (44 - 40) + (104 - 84).
-        self.assertEqual((trade.buy_fills, trade.sell_fills), (2, 2))
+        self.assertEqual((trade.buy_fills, trade.sell_fills, trade.entry_reason), (2, 2, "test_input"))
         self.assertEqual((trade.cost_basis, trade.proceeds, trade.dividends), (124, 148, 5))
         self.assertEqual((trade.realized_pnl, trade.total_pnl), (24, 29))
         self.assertEqual((trade.exit_date, trade.holding_days), (D[5], 6))
@@ -80,6 +98,12 @@ class RoundTripTests(unittest.TestCase):
         self.assertEqual((trade.exit_signal_date, trade.exit_date, trade.exit_reason), (D[2], D[2], "stop_intraday"))
         self.assertEqual((trade.proceeds, trade.realized_pnl), (90, -10))
 
+    def test_gap_stop_exit_fills_at_the_open(self):
+        bars = [bar(D[0], "10"), bar(D[1], "10"), bar(D[2], "8.5"), bar(D[3], "8.5")]
+        (trade,) = round_trips(run(bars, [(D[0], "buy", "10", "enter", "9")]))
+        self.assertEqual((trade.exit_signal_date, trade.exit_date, trade.exit_reason), (D[2], D[2], "stop_gap"))
+        self.assertEqual((trade.proceeds, trade.realized_pnl), (85, -15))
+
     def test_cash_delisting_closes_the_trade(self):
         security = Security("A", "AAA", "SYNTHETIC", delisted_on=D[3])
         result = run([bar(D[0], "10"), bar(D[1], "10"), bar(D[2], "10")], [(D[0], "buy", "10")],
@@ -87,6 +111,7 @@ class RoundTripTests(unittest.TestCase):
         (trade,) = round_trips(result)
         self.assertEqual((trade.exit_signal_date, trade.exit_date, trade.exit_reason), (None, D[3], "cash_delisting"))
         self.assertEqual((trade.sell_fills, trade.proceeds, trade.realized_pnl), (0, 120, 20))
+        self.assertEqual(trade.holding_days, 2)  # Bought Wednesday, settled Friday.
 
     def test_split_shares_are_sold_in_new_units(self):
         bars = [bar(D[0], "100"), bar(D[1], "100"), bar(D[2], "50"), bar(D[3], "52")]
@@ -111,6 +136,19 @@ class RoundTripTests(unittest.TestCase):
         result = run([bar(D[0], "10"), bar(D[1], "10"), bar(D[2], "10")], [(D[0], "buy", "1"), (D[1], "sell", "1")])
         with self.assertRaisesRegex(ArithmeticError, "Sale without an open trade"):
             round_trips(replace(result, fills=result.fills[1:]))
+        security = Security("A", "AAA", "SYNTHETIC", delisted_on=D[3])
+        delisted = run([bar(D[0], "10"), bar(D[1], "10"), bar(D[2], "10")], [(D[0], "buy", "10")],
+                       actions=(CashDelisting("A", D[3], "12"),), security=security)
+        with self.assertRaisesRegex(ArithmeticError, "without an open trade"):
+            round_trips(replace(delisted, fills=()))
+        held = run([bar(D[0], "10"), bar(D[1], "10"), bar(D[2], "10")], [(D[0], "buy", "1")],
+                   actions=(Dividend("A", D[2], "1", D[2]),))
+        final = held.equity[-1]
+        with self.assertRaisesRegex(ArithmeticError, "disagree with final positions"):
+            round_trips(replace(held, equity=held.equity[:-1] + (replace(final, positions=()),)))
+        without_dividend = tuple(a for a in held.corporate_actions if a.kind != "dividend_entitlement")
+        with self.assertRaisesRegex(ArithmeticError, "do not reconcile"):
+            round_trips(replace(held, corporate_actions=without_dividend))
 
 
 if __name__ == "__main__":

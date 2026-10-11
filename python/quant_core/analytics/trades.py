@@ -37,8 +37,9 @@ class TradeRecord:
     realized_pnl: Decimal
     unrealized_pnl: Decimal  # Open trades only, at the final close.
     total_pnl: Decimal  # Realized + unrealized + dividends.
-    return_on_cost: Decimal
+    return_on_cost: Decimal  # Total P&L over total purchases, not over peak capital.
     holding_days: int  # Calendar days from entry to exit, or to the final session.
+    fill_ids: tuple[str, ...]  # Every fill in the trade, in execution order.
 
 
 class _Holding:
@@ -48,6 +49,7 @@ class _Holding:
         self.buy_fills = self.sell_fills = 0
         self.cost_basis = self.proceeds = self.dividends = ZERO
         self.fees = self.slippage = self.realized_pnl = ZERO
+        self.fill_ids = []
 
     def record(self, status, exit_signal_date, exit_date, exit_reason, unrealized, end):
         total = self.realized_pnl + unrealized + self.dividends
@@ -55,7 +57,7 @@ class _Holding:
                            self.entry_date, self.entry_reason, exit_signal_date, exit_date, exit_reason,
                            self.buy_fills, self.sell_fills, self.cost_basis, self.proceeds, self.dividends,
                            self.fees, self.slippage, self.realized_pnl, unrealized, total,
-                           total / self.cost_basis, (end - self.entry_date).days)
+                           total / self.cost_basis, (end - self.entry_date).days, tuple(self.fill_ids))
 
 
 def round_trips(result) -> tuple[TradeRecord, ...]:
@@ -97,6 +99,7 @@ def round_trips(result) -> tuple[TradeRecord, ...]:
                 holding.realized_pnl += event.realized_pnl
             holding.fees += event.fees
             holding.slippage += event.slippage
+            holding.fill_ids.append(event.fill_id)
             if event.side == "sell" and event.position_quantity_after == 0:
                 signal = day if event.execution_kind in STOP_KINDS else event.signal_date
                 records.append(holding.record("closed", signal, day, reasons[event.order_id], ZERO, day))
@@ -107,4 +110,8 @@ def round_trips(result) -> tuple[TradeRecord, ...]:
             raise ArithmeticError("Open trades disagree with final positions")
         for asset, holding in holdings.items():
             records.append(holding.record("open", None, None, None, positions[asset].unrealized_pnl, final.session))
+        explained = sum((r.total_pnl for r in records), ZERO) + final.interest_income
+        if abs(explained - (final.equity - result.summary.initial_cash)) > max(Decimal("1e-18"),
+                                                                              abs(final.equity) * Decimal("1e-24")):
+            raise ArithmeticError("Trades and interest do not reconcile to the run's P&L")
     return tuple(sorted(records, key=lambda record: record.trade_id))
