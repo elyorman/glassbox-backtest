@@ -47,5 +47,7 @@ class CashRateSeries:
         return rate
 
     def accrual(self, amount: Decimal, previous: date, day: date) -> Decimal:
-        """Simple ACT/365 interest on `amount` held from the close of `previous` to the close of `day`."""
+        """Simple ACT/365 interest on `amount` held at the close of `previous`, for the calendar days until `day`."""
+        if day <= previous:
+            raise ValueError("Accrual requires a later session")
         return amount * self.rate_before(previous) * (day - previous).days / 365

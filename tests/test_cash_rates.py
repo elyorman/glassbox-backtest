@@ -28,11 +28,13 @@ class CashRateSeriesTests(unittest.TestCase):
             rates.rate_before(date(2024, 1, 14))
 
     def test_accrual_is_simple_act_365(self):
-        rates = series((date(2024, 1, 4), "0.05"))
+        rates = series((date(2024, 1, 4), "0.05"), (date(2024, 1, 5), "0.09"))
         with localcontext(Context(prec=28)):
-            # Cash held from Friday's close to Monday's close earns three calendar days.
+            # Cash held from Friday's close to Monday earns three calendar days at Thursday's rate.
             self.assertEqual(rates.accrual(Decimal("10000"), date(2024, 1, 5), date(2024, 1, 8)),
                              Decimal(1500) / 365)
+        with self.assertRaisesRegex(ValueError, "later session"):
+            rates.accrual(Decimal("10000"), date(2024, 1, 8), date(2024, 1, 8))
 
     def test_observations_are_validated(self):
         good = (date(2024, 1, 3), "0.05")
