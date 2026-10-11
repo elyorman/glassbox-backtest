@@ -65,6 +65,9 @@ class _Simulation:
         if source.spec != self.spec:
             raise ValueError("Order source metadata changed during preflight")
         self.sessions = tuple(d for d in snapshot.sessions if start <= d <= end)
+        if config.cash_rates is not None:
+            for previous in self.sessions[:-1]:
+                config.cash_rates.rate_before(previous)  # Refuse missing or stale rates before simulating.
         if isinstance(source, OrderSchedule):
             calendar = set(snapshot.sessions)
             if any(entry.signal_date not in calendar for entry in source.entries):
@@ -79,8 +82,12 @@ class _Simulation:
             raise ValueError(f"Data quality error: {first.code} for {first.security_id} on {first.session}")
         if not snapshot.metadata.actions_complete and config.actions_policy == "require_complete":
             raise ValueError("Corporate-action completeness is unqualified; opt into a diagnostic explicitly")
+        cash_yield = ("cash return zero" if config.cash_rates is None else
+                      f"idle cash earns {config.cash_rates.series} ({config.cash_rates.source}), "
+                      "the latest observation strictly before the previous session, simple ACT/365, "
+                      "credited before that session's corporate actions and orders")
         assumptions = (
-            "USD long-only; no leverage; cash return zero",
+            f"USD long-only; no leverage; {cash_yield}",
             "Decimal precision 28, half-even rounding; intermediate money is not rounded to cents",
             ("Close-generated market requests execute once at the next supplied session open"
              if config.execution_delay_sessions == 1 else
@@ -115,7 +122,7 @@ class _Simulation:
             )
         if config.execution_delay_sessions == 2:
             assumptions += ("Registered delay diagnostic: original close signals/quantities execute at the second session open",)
-        self.manifest = RunManifest(3, __version__, sys.version.split()[0], _engine_hash(), quality.dataset_hash,
+        self.manifest = RunManifest(4, __version__, sys.version.split()[0], _engine_hash(), quality.dataset_hash,
                                     content_hash(self.config), self.spec, snapshot.metadata,
                                     self.config, quality.issues, assumptions)
         self.bars = defaultdict(dict)
@@ -156,6 +163,12 @@ class _Simulation:
             raise ArithmeticError("Cash movement ledger does not reconcile")
         self.cash_movements.append(CashMovement(len(self.cash_movements) + 1, day, kind, asset,
                                                 amount, self.ledger.cash, order_id))
+
+    def _interest(self, previous, day):
+        amount = self.config.cash_rates.accrual(self.ledger.cash, previous, day)
+        if amount:
+            self.ledger.credit_interest(amount)
+            self._cash(day, "interest", None, amount)
 
     def _action(self, day, kind, asset, quantity, amount, ratio=None, pay_date=None, pnl=None):
         self.action_records.append(CorporateActionRecord(len(self.action_records) + 1, day, kind,
@@ -373,7 +386,8 @@ class _Simulation:
         state = DailyState(day, self.ledger.cash, sum((r.amount for r in self.ledger.receivables), ZERO),
                            sum((v.market_value for v in values), ZERO), equity, self.ledger.realized_pnl,
                            sum((v.unrealized_pnl for v in values), ZERO), self.ledger.dividend_income,
-                           self.ledger.fees, self.ledger.slippage, session_return, 1 - equity / self.peak, values)
+                           self.ledger.fees, self.ledger.slippage, session_return, 1 - equity / self.peak, values,
+                           self.ledger.interest_income)
         self.previous_equity = equity
         self.states.append(state)
         return state
@@ -531,6 +545,8 @@ class _Simulation:
 
     def run(self):
         for index, day in enumerate(self.sessions):
+            if index and self.config.cash_rates is not None:
+                self._interest(self.sessions[index - 1], day)
             self._corporate_actions(day)
             self._stop_orders(day, opening=True)
             self._execute(day)

@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from quant_core.data import DataMetadata, identity, number, session
 from quant_core.data.quality import QualityIssue
+from quant_core.data.rates import CashRateSeries
 from quant_core.execution import ExecutionProfile, OrderRequest
 from quant_core.portfolio import PositionValue, Receivable
 from quant_core.provenance import content_hash
@@ -24,6 +25,7 @@ class RunConfig:
     risk: RiskPolicy | None = None
     execution_delay_sessions: int = 1
     strict_discontinuities: bool = False
+    cash_rates: CashRateSeries | None = None  # None: idle cash earns nothing.
 
     def __post_init__(self):
         object.__setattr__(self, "initial_cash", number(self.initial_cash))
@@ -52,6 +54,8 @@ class RunConfig:
             raise ValueError("Delayed execution diagnostic currently requires risk=None")
         if type(self.strict_discontinuities) is not bool:
             raise ValueError("strict_discontinuities must be an explicit boolean")
+        if self.cash_rates is not None and not isinstance(self.cash_rates, CashRateSeries):
+            raise ValueError("Cash yield requires CashRateSeries")
 
 
 @dataclass(frozen=True)
@@ -198,6 +202,7 @@ class DailyState:
     session_return: Decimal | None
     drawdown: Decimal  # Positive fraction below the initial-capital-inclusive peak.
     positions: tuple[PositionValue, ...]
+    interest_income: Decimal = Decimal(0)  # Cumulative idle-cash interest.
 
 
 @dataclass(frozen=True)

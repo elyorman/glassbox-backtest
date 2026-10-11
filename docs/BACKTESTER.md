@@ -35,6 +35,7 @@ prices. Delay 2 currently requires risk disabled. The CLI exposes
 
 | Phase | Behavior |
 | --- | --- |
+| Before open | If `RunConfig.cash_rates` is set, credit interest on the previous close's cash: `cash × rate × calendar days / 365`, using the latest rate observed strictly before the previous session. |
 | Before open | Apply effective splits to holdings, pending quantities and stops, retaining acquisition basis. |
 | Before open | Accrue dividend entitlement from shares owned before opening fills, using post-split share units for same-day events. |
 | Before open | Process explicit cash-delisting settlements; reject later trading in the delisted security. |
@@ -54,7 +55,7 @@ validation and sizing as earlier entries. Valid requests expire with
 `no_next_session`, retaining their stop and linked approved/capped risk decision.
 Invalid requests retain their actual risk rejection reason.
 
-The portfolio is long-only USD with shared cash, no leverage, and zero cash yield. Sales may fund later buys at the same simulated open. This is an economic capital model; it does not simulate historical brokerage settled-cash rules. Arbitrary sell quantities cannot create short positions.
+The portfolio is long-only USD with shared cash and no leverage. Idle cash earns nothing unless `RunConfig.cash_rates` supplies a `CashRateSeries` (the tester release uses the Treasury 3-month par yield from `quant_core.data.treasury`). The run is refused before simulation if any session lacks a rate observed within 10 days before its previous session. Interest is a cash movement of kind `interest`, and `DailyState.interest_income` is cumulative. Sales may fund later buys at the same simulated open. This is an economic capital model; it does not simulate historical brokerage settled-cash rules. Arbitrary sell quantities cannot create short positions.
 
 The default profile uses 10 basis points of adverse slippage per side, zero percentage fees, and zero flat fees. These are configurable research assumptions. Execution price is `reference × (1 ± slippage_bps / 10000)`; reference is raw open for market/gap-stop fills and trigger for intraday stops. Fees are `executed_notional × fee_bps / 10000 + fee_per_order`. Slippage is embedded in execution price and separately reported; it is not debited again. The engine does not clamp modeled costs to bar highs/lows or claim actual auction fills. Positive daily volume does not prove capacity; Stage 3 adds prior-volume entry participation limits, not a modeled auction or emergency-exit capacity guarantee.
 
@@ -87,7 +88,7 @@ Average-cost basis includes acquisition fees. On a partial sale, dispose of the 
 
 ```text
 equity = cash + position market value + unpaid dividend receivables
-equity = initial capital + realized P&L + unrealized P&L + accrued dividend income
+equity = initial capital + realized P&L + unrealized P&L + accrued dividend income + interest income
 ```
 
 Cash movements reconcile after every cash event. The equity identity allows a tiny explicit tolerance for Decimal rounding in partial basis disposal; that tolerance does not change reported values or trade decisions.

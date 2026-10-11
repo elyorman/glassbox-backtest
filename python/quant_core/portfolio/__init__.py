@@ -39,6 +39,7 @@ class PortfolioLedger:
         self.receivables: list[Receivable] = []
         self.realized_pnl = ZERO
         self.dividend_income = ZERO
+        self.interest_income = ZERO
         self.fees = ZERO
         self.slippage = ZERO
 
@@ -70,6 +71,10 @@ class PortfolioLedger:
             del self.positions[asset]
         return pnl
 
+    def credit_interest(self, amount):
+        self.cash += amount
+        self.interest_income += amount
+
     def values(self, marks):
         return tuple(PositionValue(asset, p.quantity, p.basis, marks[asset],
                                    p.quantity * marks[asset], p.quantity * marks[asset] - p.basis)
@@ -80,7 +85,7 @@ class PortfolioLedger:
             raise ArithmeticError("Invalid portfolio cash, quantity, or basis")
         receivables = sum((r.amount for r in self.receivables), ZERO)
         equity = self.cash + receivables + sum((v.market_value for v in values), ZERO)
-        reconciled = (self.initial_cash + self.realized_pnl + self.dividend_income
+        reconciled = (self.initial_cash + self.realized_pnl + self.dividend_income + self.interest_income
                       + sum((v.unrealized_pnl for v in values), ZERO))
         # Relative tolerance accommodates decimal rounding on partial basis disposal.
         if abs(equity - reconciled) > max(Decimal("1e-18"), abs(equity) * Decimal("1e-24")):

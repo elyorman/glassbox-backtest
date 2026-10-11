@@ -105,8 +105,9 @@ def summarize_run(result):
                 contributions[action.security_id] += action.amount
         for position in result.equity[-1].positions:
             contributions[position.security_id] += position.market_value
-        if abs(sum(contributions.values(), ZERO) - (result.summary.final_equity - result.summary.initial_cash)) > max(Decimal("1e-18"), abs(result.summary.final_equity) * Decimal("1e-24")):
-            raise ArithmeticError("Asset contributions do not reconcile")
+        interest = result.equity[-1].interest_income
+        if abs(sum(contributions.values(), ZERO) + interest - (result.summary.final_equity - result.summary.initial_cash)) > max(Decimal("1e-18"), abs(result.summary.final_equity) * Decimal("1e-24")):
+            raise ArithmeticError("Asset contributions and interest do not reconcile")
         calendar_days = (result.equity[-1].session - result.equity[0].session).days + 1
         cagr = (result.summary.final_equity / result.summary.initial_cash) ** (Decimal("365.2425") / calendar_days) - 1
         metrics.update({"cagr_calendar": cagr,
@@ -114,6 +115,7 @@ def summarize_run(result):
                                   and all(v is not None for v in returns) else None,
                         "calendar_days_inclusive": calendar_days,
                         "fees": result.summary.fees, "slippage": result.summary.slippage,
+                        "interest_income": interest,
                         "fill_count": len(result.fills), "sale_fill_count": len(exits),
                         "rejected_orders": result.summary.rejected_order_count,
                         "expired_orders": result.summary.expired_order_count,
