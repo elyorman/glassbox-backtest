@@ -8,8 +8,8 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from quant_core.analytics import summarize_run
-from quant_core.backtest import OrderSchedule, RunConfig, ScheduledOrder, run_backtest
-from quant_core.data import Bar, DataMetadata, Security, Snapshot
+from quant_core.backtest import OrderSchedule, RunConfig, ScheduledOrder, SourceSpec, run_backtest
+from quant_core.data import Bar, DataMetadata, Dividend, Security, Snapshot
 from quant_core.data.rates import CashRateSeries
 from quant_core.execution import ExecutionProfile, OrderRequest
 from quant_core.reporting import save_run, verify_run
@@ -18,6 +18,7 @@ META = DataMetadata("synthetic", datetime(2024, 1, 10, tzinfo=timezone.utc),
                     "fixed_synthetic_universe", True, "synthetic_explicit_sessions")
 WEEKEND = (date(2024, 1, 5), date(2024, 1, 8), date(2024, 1, 9))  # Friday, Monday, Tuesday.
 WEEK = (date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4))
+FIVE = WEEK + (date(2024, 1, 5), date(2024, 1, 8))  # Tuesday to the next Monday.
 D = Decimal
 
 
@@ -67,9 +68,40 @@ class InterestTests(unittest.TestCase):
         metrics = summarize_run(result)
         self.assertEqual(metrics["interest_income"], D("0.15001"))
         self.assertEqual(metrics["asset_pnl"], {"A": 0})
+        self.assertEqual((metrics["sharpe"], metrics["sortino"]), (None, None))  # No zero-reference ratios.
         tampered = replace(result, equity=result.equity[:-1] + (replace(result.equity[-1], interest_income=D(0)),))
         with self.assertRaisesRegex(ArithmeticError, "interest do not reconcile"):
             summarize_run(tampered)
+
+    def test_cash_arriving_at_a_session_open_earns_nothing_for_the_night_before(self):
+        data = replace(snapshot(FIVE), actions=(Dividend("A", FIVE[2], "1", FIVE[3]),))
+        buy = ScheduledOrder(FIVE[0], OrderRequest("A", "buy", "50"))
+        result = run_backtest(data, OrderSchedule((buy,)), RunConfig(
+            "1000", ExecutionProfile("0"), cash_rates=rates((date(2023, 12, 29), "0.0365"))))
+        interest = {m.session: m.amount for m in result.cash_movements if m.kind == "interest"}
+        # Friday: the 50 dividend paid that morning earns nothing; Monday: it earns three nights.
+        self.assertEqual(interest[FIVE[3]], D("500.15001") * D("0.0001"))
+        self.assertEqual(interest[FIVE[4]], (D("500.200025001") + 50) * D("0.0003"))
+
+    def test_a_run_starting_mid_dataset_accrues_nothing_on_its_first_session(self):
+        result = run_backtest(snapshot(FIVE), OrderSchedule(()), RunConfig(
+            "1000", ExecutionProfile("0"), start=FIVE[2], cash_rates=rates((date(2023, 12, 29), "0.0365"))))
+        self.assertEqual([s.interest_income for s in result.equity[:2]], [0, D("0.1")])
+
+    def test_a_stale_rate_mid_run_refuses_before_the_source_is_called(self):
+        calls = []
+
+        class Probe:
+            spec = SourceSpec("probe", "1", "0" * 64)
+
+            def orders(self, context):
+                calls.append(context.as_of)
+                return ()
+
+        series = rates((date(2023, 12, 25), "0.05"))  # Eleven days before Friday 2024-01-05.
+        with self.assertRaisesRegex(ValueError, "stale for 2024-01-05"):
+            run_backtest(snapshot(FIVE), Probe(), RunConfig("1000", ExecutionProfile("0"), cash_rates=series))
+        self.assertEqual(calls, [])
 
     def test_stale_or_missing_rates_refuse_the_run_before_simulating(self):
         with self.assertRaisesRegex(ValueError, "stale for 2024-01-02"):
@@ -96,7 +128,8 @@ class InterestTests(unittest.TestCase):
     def test_rate_assumption_and_bundle_columns_are_recorded(self):
         result = run(WEEK, rates((date(2023, 12, 29), "0.05")))
         self.assertEqual(result.manifest.schema_version, 4)
-        self.assertTrue(any("idle cash earns test_3m (test_source)" in a for a in result.manifest.assumptions))
+        self.assertTrue(any("idle cash at each session's close earns test_3m (test_source)" in a
+                            for a in result.manifest.assumptions))
         self.assertEqual(result.manifest.config.cash_rates.observations, ((date(2023, 12, 29), D("0.05")),))
         with TemporaryDirectory() as directory:
             save_run(result, Path(directory) / "run")

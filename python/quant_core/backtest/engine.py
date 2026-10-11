@@ -83,9 +83,11 @@ class _Simulation:
         if not snapshot.metadata.actions_complete and config.actions_policy == "require_complete":
             raise ValueError("Corporate-action completeness is unqualified; opt into a diagnostic explicitly")
         cash_yield = ("cash return zero" if config.cash_rates is None else
-                      f"idle cash earns {config.cash_rates.series} ({config.cash_rates.source}), "
-                      "the latest observation strictly before the previous session, simple ACT/365, "
-                      "credited before that session's corporate actions and orders")
+                      f"idle cash at each session's close earns {config.cash_rates.series} "
+                      f"({config.cash_rates.source}) until the next session: the latest observation strictly "
+                      "before the earlier session (at most 10 days old), simple ACT/365 over the calendar days "
+                      "between them, credited at the start of the next session before corporate actions, stops "
+                      "and orders; unpaid dividend receivables earn nothing")
         assumptions = (
             f"USD long-only; no leverage; {cash_yield}",
             "Decimal precision 28, half-even rounding; intermediate money is not rounded to cents",

@@ -87,6 +87,10 @@ def summarize_run(result):
     with localcontext(CONTEXT):
         returns = tuple(s.session_return for s in result.equity)
         metrics = return_metrics(returns)
+        if result.manifest.config.cash_rates is not None:
+            # Against a zero reference rate, Treasury interest would count as excess return. Excess-return
+            # ratios over the run's own cash accrual come with the evidence report (roadmap step E).
+            metrics.update(sharpe=None, sortino=None)
         states = {s.session: s for s in result.equity}
         turnover = sum((f.notional / states[f.execution_date].equity for f in result.fills
                         if states[f.execution_date].equity > 0), ZERO)
