@@ -13,7 +13,8 @@ from quant_core.data.treasury import SERIES, SOURCE, TreasuryClient, TreasuryRes
 Y2008 = (b'Date,"1 Mo","3 Mo","6 Mo","1 Yr","2 Yr","3 Yr","5 Yr","7 Yr","10 Yr","20 Yr","30 Yr"\n'
          b'12/31/2008,0.11,0.11,0.27,0.37,0.76,1.00,1.55,1.87,2.25,3.05,2.69\n'
          b'12/24/2008,0.00,,0.23,0.40,0.90,1.14,1.54,1.83,2.20,2.94,2.63\n'
-         b'12/23/2008,0.01,0.02,0.24,0.39,0.86,1.10,1.53,1.83,2.17,2.92,2.59')
+         b'12/23/2008,0.01,0.02,0.24,0.39,0.86,1.10,1.53,1.83,2.17,2.92,2.59\n'
+         b'01/02/2008,3.09,3.26,3.32,3.17,2.88,2.89,3.28,3.54,3.91,4.39,4.35')
 Y2010 = (b'Date,"1 Mo","3 Mo","6 Mo","1 Yr","2 Yr","3 Yr","5 Yr","7 Yr","10 Yr","20 Yr","30 Yr"\n'
          b'10/12/2010,0.12,0.13,0.18,0.24,0.39,0.61,1.16,1.76,2.42,3.29,3.75\n'
          b'10/11/2010,,,,,,,,,,,\n'
@@ -25,7 +26,8 @@ AT = datetime(2026, 10, 10, tzinfo=timezone.utc)
 
 class ParseTests(unittest.TestCase):
     def test_three_month_column_is_read_by_name_as_ascending_fractions(self):
-        self.assertEqual(parse_year(Y2008, 2008), ((date(2008, 12, 23), Decimal("0.0002")),
+        self.assertEqual(parse_year(Y2008, 2008), ((date(2008, 1, 2), Decimal("0.0326")),
+                                                   (date(2008, 12, 23), Decimal("0.0002")),
                                                    (date(2008, 12, 31), Decimal("0.0011"))))
         self.assertEqual(parse_year(Y2026, 2026), ((date(2026, 1, 2), Decimal("0.0365")),))
 
@@ -33,10 +35,12 @@ class ParseTests(unittest.TestCase):
         self.assertEqual([day for day, _ in parse_year(Y2010, 2010)], [date(2010, 10, 8), date(2010, 10, 12)])
 
     def test_malformed_files_are_refused(self):
-        header = b'Date,"3 Mo"\n'
-        cases = [(b'Date,"6 Mo"\n01/02/2008,1.0', "lacks"), (header + b'2008-01-02,1.0', "line 2"),
-                 (header + b'01/02/2008,abc', "line 2"), (header + b'01/02/2007,1.0', "dated 2007-01-02"),
-                 (header + b'01/02/2008,1.0\n01/02/2008,1.1', "repeats"), (b'\xff\xfe', "not a CSV")]
+        header = b'Date,"3 Mo","6 Mo"\n'
+        cases = [(b'Date,"6 Mo"\n01/02/2008,1.0', "lacks"), (b'Date,"3 Mo","3 Mo"\n01/02/2008,1.0,1.0', "lacks"),
+                 (header + b'2008-01-02,1.0,1.0', "line 2"), (header + b'01/02/2008,abc,1.0', "line 2"),
+                 (header + b'01/02/2008,500,1.0', "line 2"), (header + b'01/02/2008,1.0', "line 2"),
+                 (header + b'01/02/2008,1.0,1.0,1.0', "line 2"), (header + b'01/02/2007,,', "dated 2007-01-02"),
+                 (header + b'01/02/2008,1.0,1.0\n01/02/2008,1.1,1.0', "repeats"), (b'\xff\xfe', "not a CSV")]
         for raw, message in cases:
             with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
                 parse_year(raw, 2008)
@@ -45,8 +49,8 @@ class ParseTests(unittest.TestCase):
         later = datetime(2026, 10, 11, tzinfo=timezone.utc)
         rates = cash_rate_series([TreasuryResponse(2010, Y2010, later), TreasuryResponse(2008, Y2008, AT)])
         self.assertEqual((rates.source, rates.series, rates.retrieved_at), (SOURCE, SERIES, later))
-        self.assertEqual(rates.observations[0], (date(2008, 12, 23), Decimal("0.0002")))
-        self.assertEqual(len(rates.observations), 4)
+        self.assertEqual(rates.observations[0], (date(2008, 1, 2), Decimal("0.0326")))
+        self.assertEqual(len(rates.observations), 5)
         with self.assertRaisesRegex(ValueError, "Duplicate"):
             cash_rate_series([TreasuryResponse(2008, Y2008, AT), TreasuryResponse(2008, Y2008, AT)])
         with self.assertRaises(ValueError):
@@ -59,27 +63,48 @@ class ClientTests(unittest.TestCase):
                 patch("quant_core.data.remote.build_opener") as opener:
             opener.return_value.open.return_value = BytesIO(raw)
             response = client.year(year)
-        return response, opener.return_value.open.call_count
+        return response, opener.return_value.open.call_args_list
 
     def test_completed_years_are_cached_and_not_downloaded_again(self):
         with TemporaryDirectory() as directory:
             client = TreasuryClient(Path(directory))
             first, calls = self.download(client, 2008, Y2008)
-            self.assertEqual((first.raw, calls), (Y2008, 1))
+            self.assertEqual((first.raw, len(calls)), (Y2008, 1))
+            self.assertEqual(calls[0][0][0].full_url,
+                             "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/"
+                             "daily-treasury-rates.csv/2008/all?type=daily_treasury_yield_curve"
+                             "&field_tdr_date_value=2008&page&_format=csv")
             second, calls = self.download(client, 2008, b"unused")
-            self.assertEqual((second, calls), (first, 0))
+            self.assertEqual((second, calls), (first, []))
+
+    def test_a_year_is_final_from_8_january_of_the_next_year(self):
+        with TemporaryDirectory() as directory:
+            client = TreasuryClient(Path(directory))
+            self.download(client, 2008, Y2008, datetime(2009, 1, 7, 23, tzinfo=timezone.utc))
+            self.assertEqual(list(Path(directory).glob("*.request.json")), [])
+            self.download(client, 2008, Y2008, datetime(2009, 1, 8, tzinfo=timezone.utc))
+            self.assertEqual(len(list(Path(directory).glob("*.request.json"))), 1)
+
+    def test_incomplete_completed_years_are_not_cached(self):
+        december = Y2008.rsplit(b"\n", 1)[0]  # Without the January row.
+        january = Y2008.split(b"\n", 1)[0] + b"\n" + Y2008.rsplit(b"\n", 1)[1]
+        for raw in (Y2008.split(b"\n", 1)[0], december, january):
+            with self.subTest(raw=raw[-30:]), TemporaryDirectory() as directory:
+                with self.assertRaisesRegex(ValueError, "2008 file looks incomplete; it was not cached"):
+                    self.download(TreasuryClient(Path(directory)), 2008, raw)
+                self.assertEqual(list(Path(directory).iterdir()), [])
 
     def test_the_current_year_is_downloaded_each_time_and_kept(self):
         with TemporaryDirectory() as directory:
             client = TreasuryClient(Path(directory))
             self.download(client, 2026, Y2026)
             _, calls = self.download(client, 2026, Y2026)
-            self.assertEqual(calls, 1)
+            self.assertEqual(len(calls), 1)
             self.assertEqual(len(list(Path(directory).glob("*.csv"))), 1)
             self.assertEqual(list(Path(directory).glob("*.request.json")), [])
             # Early January: the previous year may still receive its last rows.
             _, calls = self.download(client, 2026, Y2026, datetime(2027, 1, 5, tzinfo=timezone.utc))
-            self.assertEqual(calls, 1)
+            self.assertEqual(len(calls), 1)
             self.assertEqual(list(Path(directory).glob("*.request.json")), [])
 
     def test_invalid_years_and_responses_are_not_cached(self):

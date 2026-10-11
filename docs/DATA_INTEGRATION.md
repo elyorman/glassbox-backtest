@@ -12,9 +12,11 @@ coverage by itself.
 ## Treasury cash rates
 
 `quant_core.data.treasury` reads the U.S. Treasury Daily Par Yield Curve, one
-public CSV per year. `TreasuryClient(cache_dir).year(year)` downloads a year;
-completed years (from 8 January of the next year) are cached, and the current
-year is downloaded each time. `parse_year` reads the "3 Mo" column by name (the
+public CSV per year (1990 onward). `TreasuryClient(cache_dir).year(year)`
+downloads a year. A completed year (from 8 January of the next year) is cached
+only if it covers early January to late December, and is then frozen: a later
+Treasury correction needs a new cache directory. The current year is downloaded
+each time. `parse_year` reads the "3 Mo" column by name (the
 column set changes between years), converts percent to a fraction and skips
 blank cells (holidays and a few missing days). `cash_rate_series(responses)`
 combines years into the `CashRateSeries` that `RunConfig.cash_rates` takes; see

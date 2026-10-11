@@ -2,8 +2,9 @@
 
 Public data, no key. One CSV per calendar year, newest row first, values in
 percent; the column set changes between years, so columns are read by name.
-Completed years are cached by request. The current year grows every day, so it
-is downloaded again on each call; every body is still kept under its SHA-256.
+Completed years are cached by request once they cover early January to late
+December. The current year grows every day, so it is downloaded again on each
+call; every body is still kept under its SHA-256.
 """
 
 import csv
@@ -46,21 +47,25 @@ def parse_year(raw: bytes, year: int) -> tuple[tuple[date, Decimal], ...]:
         rows = list(reader)
     except (UnicodeError, csv.Error):
         raise ValueError(f"Treasury {year} response is not a CSV file") from None
-    if not fieldnames or "Date" not in fieldnames or COLUMN not in fieldnames:
-        raise ValueError(f"Treasury {year} CSV lacks the Date and {COLUMN} columns")
+    if (not fieldnames or "Date" not in fieldnames or COLUMN not in fieldnames
+            or len(set(fieldnames)) != len(fieldnames)):
+        raise ValueError(f"Treasury {year} CSV lacks unique Date and {COLUMN} columns")
     observations = []
     for line, row in enumerate(rows, 2):
-        value = row[COLUMN]
         try:
+            if None in row or None in row.values():
+                raise ValueError("Row length differs from the header")
             day = datetime.strptime(row["Date"], "%m/%d/%Y").date()
-            if value is None or not value.strip():
-                continue
-            rate = number(value.strip()) / 100
+            value = row[COLUMN].strip()
+            rate = number(value) / 100 if value else None
+            if rate is not None and not -1 < rate <= 1:
+                raise ValueError("Rate out of range")
         except (TypeError, ValueError):
             raise ValueError(f"Invalid Treasury {year} CSV line {line}") from None
         if day.year != year:
             raise ValueError(f"Treasury {year} CSV line {line} is dated {day}")
-        observations.append((day, rate))
+        if rate is not None:
+            observations.append((day, rate))
     observations.sort()
     if len({day for day, _ in observations}) != len(observations):
         raise ValueError(f"Treasury {year} CSV repeats a date")
@@ -104,8 +109,12 @@ class TreasuryClient:
         raw = fetch(URL.format(year=year), {"Accept": "text/csv", "User-Agent": "quant-platform-core"},
                     self.timeout, "Treasury")
         retrieved_at = _now()
-        parse_year(raw, year)
+        observations = parse_year(raw, year)
         if final:
+            # Every file from 1990 to 2025 runs from 2-4 January to 29-31 December.
+            if (not observations or observations[0][0] > date(year, 1, 10)
+                    or observations[-1][0] < date(year, 12, 24)):
+                raise ValueError(f"Treasury {year} file looks incomplete; it was not cached. Try again later.")
             cache.store(request, raw, retrieved_at)
         else:
             publish_bytes(raw, self.cache_dir / (sha256(raw).hexdigest() + ".csv"), "Treasury")
