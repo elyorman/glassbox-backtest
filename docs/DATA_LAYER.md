@@ -109,9 +109,9 @@ it caches raw API bodies and request hashes under ignored storage and uses saved
 credentials without printing them. `market_backtest.py` normalizes the frozen
 ten-symbol dataset, reconciles issuer cash distributions/payment dates, and
 retains vendor discrepancies. This is a narrow exploratory script, not the
-production provider adapter. Its XLF non-cash warmup convention, incomplete
-qualification and exact reproduction steps are in the
-[research evidence](RESEARCH_PLAN.md#first-real-market-exploratory-run).
+production provider adapter. The V1 product adapter is Tiingo (see
+[the roadmap](ROADMAP.md)); `market_backtest.py` and the other 2026-10
+research scripts are retained under the git tag `archive/research-2026-10`.
 
 - Alpaca development adapter, immutable raw downloads, retries/rate limits, and qualified daily-open/feed semantics.
 - Verified exchange calendars and completed-session handling.
@@ -144,7 +144,3 @@ strategy result. All eight qualification capabilities remain unresolved,
 including complete actions, identity, delisting treatment and usage evidence.
 Current survivors are not historical index membership. No qualified independent
 dataset or purchased data is supplied by this implementation.
-
-## Research evidence
-
-Dated SEC status is consolidated in [research status](RESEARCH_STATUS.md); detailed study registrations and original evidence remain linked there. No fundamental strategy consumes those records as qualified production inputs.

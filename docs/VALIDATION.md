@@ -7,19 +7,16 @@ Its qualification records are reviewed evidence supplied by the researcher;
 the software does not verify provider rights or independent sourcing merely
 because a field says `passed`.
 
-The gated campaign workflow has been exercised on synthetic fixtures only.
-No empirical strategy has been nominated or passed a gated real-data final
-evaluation. A separate private ten-year momentum diagnostic was requested and
-run on 2026-10-03, with its plan/trials/limitations retained in ignored storage.
-That diagnostic exposes the proposed 2024–2026 holdout; those dates cannot be
-claimed as untouched in a future empirical campaign. See the
-[research evidence](RESEARCH_PLAN.md#first-real-market-exploratory-run).
+This campaign workflow is a research tool. Built-in strategies qualify under
+[the evidence standard](STRATEGY_EVIDENCE.md), not under the nomination gates
+described here; every study, including the 2026-10 campaigns that used this
+tool, is listed in [the research ledger](RESEARCH_LEDGER.md).
 
 ## Research basis and implemented choices
 
-The [research plan](RESEARCH_PLAN.md) defines the hypotheses, proposed periods,
-recipe budgets and independent-data discipline. The implementation makes these
-choices visible rather than optimizing the simulator against the strategy.
+A campaign declares its hypotheses, periods and recipe budget before any run.
+The implementation makes these choices visible rather than optimizing the
+simulator against the strategy.
 
 Sharpe's original discussion distinguishes differential-return conventions and
 the assumptions behind time aggregation. We report a conventional daily ratio
@@ -337,167 +334,3 @@ configuration, dataset hash, seed, status and decision reason. It prevents
 automatic nomination under the original budget. `record-holdout-exposure
 CAMPAIGN --reason TEXT` records accidental/external performance exposure,
 including after freezing, and blocks fresh-final-evidence claims.
-
-## Verification and remaining scope
-
-The earlier **276-test** foundation passed on Linux/Python 3.12.7. The saved Stage 5 fixture at
-`local/validation-reference-final/campaign` verifies 72 accounting bundles and
-151 audit events, with `engineering_only`, no nominee, no external holdout
-exposure and `final_consumed=false`. Its campaign hash is
-`604aa937acfa7b84ca022378e943ca3da00d55868efd31b02810ca2830cc15d2`.
-The earlier schema-1/2/3 backtest, risk and strategy reference bundles also
-remain verifiable with their original hashes.
-
-The current suite includes independent financial examples, zero-variance/
-bankruptcy cases, contribution reconciliation through splits/dividends/delisting,
-paired and fold bootstrap invariants, timestamp label purging, phase gates,
-failure retention, benchmark rejection, future-price exclusion, CSV/bundle
-tampering, code changes, provider degradation and one-time final consumption.
-State-transition tests use explicitly fabricated nominations to exercise final
-gates; those mocks are not evidence that the synthetic alpha passes nomination.
-
-The market diagnostic retains 20 bundles, including one invalid benchmark.
-Independent reconstruction checks 50,280 daily cash/share/receivable/equity
-valuations and 5,656 next/second-open fill prices against the raw snapshot.
-An analytics regression test covers zero-dollar outside-universe dividend audit
-records; unexpected nonzero outside-universe income remains an error. The first
-saved simulation was recovered after that reporting fix, without re-simulation
-or parameter tuning; the recovery is separately recorded.
-
-The subsequent private [all-ten-recipe comparison](RESEARCH_PLAN.md#all-predefined-strategy-comparison)
-retains 70 trials: 67 completed portfolios and three invalid full-budget SPY
-references after opening-gap rejection. All 70 ledger reconstructions passed,
-covering 171,388 session valuations and 52,238 fills. Five matching decade
-bundles were verified and reused; 65 simulations are new. All 12 report-artifact
-hashes were checked. Three comparison tests cover price-independent common
-warmup, deterministic descriptive ranking/exclusions, and invested-reference
-validity. This is separate exploratory evidence on exposed dates, not a gated
-campaign, nominee, or fresh final evaluation.
-
-The private [robustness audit](RESEARCH_PLAN.md#robustness-audit-results--2026-10-03)
-adds 30 bounded, preregistered trials for two unchanged parents, six one-factor
-neighbors, four allocation/ATR controls and three references at two costs.
-Five original portfolios are reused; all 35 independent ledger checks pass,
-covering 84,550 session valuations and 15,974 fills, including 30 gap stops and
-155 intraday stops. Its 28 tests cover independent split/dividend/partial-sale
-attribution, open holdings and underwater episodes, rolling windows, historical
-cash timing/staleness, exposure matching, zero-variance regression, omitted or
-altered stops/fills, incomplete panels, mutable-plan aliasing and artifact
-tampering. Report export verifies bundles, exact registered configurations,
-core metrics, immutable records and decisions before producing CSV/PNG/PDF/HTML.
-All 66 evidence-file and 22 report-artifact hashes were checked. Both parents
-pass the limited positive-CAGR neighbor rule but fail their own stated
-objectives; no nominee or fresh final evaluation is created. The cash overlay
-and exposure-matched return mix are separately labelled diagnostics, not new
-executable strategies or retrospective changes to the decision rules.
-
-Actual Alpaca/provider qualification and the registered ten-recipe empirical
-campaign remain required. There is no normalized real-provider snapshot with
-qualified actions/calendar/rights in this repository yet. Historical cash-rate
-qualification beyond the private Treasury overlay, richer measured execution/
-exit capacity, qualified point-in-time stock universes, DSR/PBO,
-independent-engine/Windows checks, prospective shadow
-recording and ML refitting remain separate work. ML can reuse these contracts
-and label-interval checks in Stage 6, but production model selection still
-requires empirical evidence under PROJECT.md's ML data workflow; built-in
-strategies follow [the evidence standard](STRATEGY_EVIDENCE.md).
-
-## Frozen stock campaign and separate-provider retest
-
-`python/research/stock_campaign.py` extends private exploratory research with
-four distinct stock hypotheses, four one-factor neighbors and three references.
-It publishes the exact source/data hashes and 99-trial budget before execution,
-retains every started/completed/failed attempt, and does not mutate outcomes or
-select a different neighbor after failures. Three chronological portfolios reset
-cash and holdings; previous prices provide causal feature warmup. These windows
-are exposed fixed-rule diagnostics, not a fresh OOS model-training evaluation.
-
-`verify` reconstructs exact source/configuration bindings, historical-reference
-Sharpe, annual/core metrics, benchmark validity and independent raw-price
-ledgers. Frozen entries must match the registered decision rule. `report`
-verifies before creating exclusive CSV/PNG/PDF/HTML exports with artifact hashes.
-Attribution, rolling/recovery/concentration and conditional bootstrap results
-remain diagnostics, not strategy variants. Upstream unknown dividends, missing
-security history and the deliberately surviving panel remain explicit.
-
-```bash
-PYTHONPATH=python .venv/bin/python python/research/stock_campaign.py run \
-  --output local/stock-campaign-2026-10-03
-PYTHONPATH=python .venv/bin/python python/research/stock_campaign.py verify \
-  --output local/stock-campaign-2026-10-03
-PYTHONPATH=python .venv/bin/python python/research/stock_campaign.py report \
-  --output local/stock-campaign-2026-10-03
-```
-
-Reruns require new output directories; existing evidence is never overwritten.
-Current source changes deliberately invalidate the earlier audit's current-code
-reproduction gate; its saved bundles/evidence remain preserved. Do not rewrite
-old source registrations to approve new code.
-
-The separate independent-data entrypoint reruns only promising frozen parents
-and their references on exactly the registered panel/window/cost/delay settings.
-It rejects absent candidates, reused providers, unreviewed capabilities, missing
-actions or changed panels/calendars. Qualification is the existing schema-1
-`Qualification` contract with scope `independent_retest_fixed_sample`, all eight
-capabilities passed, bound snapshot and original snapshot hashes, reviewer/date,
-limitations and evidence of feed independence. Provider-specific upstream input
-locations still require review; the normalized snapshot hash is verified.
-
-```bash
-PYTHONPATH=python .venv/bin/python python/research/stock_campaign.py retest \
-  --campaign local/stock-campaign-2026-10-03 \
-  --snapshot PATH_TO_QUALIFIED_INDEPENDENT_SNAPSHOT \
-  --qualification PATH_TO_REVIEWED_QUALIFICATION_JSON \
-  --output local/stock-independent-retest
-PYTHONPATH=python .venv/bin/python python/research/stock_campaign.py verify \
-  --output local/stock-independent-retest
-PYTHONPATH=python .venv/bin/python python/research/stock_campaign.py report \
-  --output local/stock-independent-retest
-```
-
-Retest verification/reporting dispatches to `research.stock_retest`. Exact
-original frozen procedures, qualification bytes, complete-action ledgers,
-objective comparisons and daily/total cross-provider differences are checked.
-Limits are declared before outcomes: 0.05 total-return difference and 0.005
-maximum daily-return difference, measured as fractions. Agreement does not
-automatically qualify a built-in strategy or supply fresh temporal evidence.
-No independent market dataset, review approval or purchase is fabricated.
-
-The stock extension raises the current suite to **304 passing tests**. The
-actual campaign's 99 ledgers pass independent reconstruction. See
-[its results, limitations and reported finalization recovery](RESEARCH_PLAN.md#stock-campaign-results--2026-10-03).
-The report-repair path preserves 204 original file hashes and exact financial
-results; no rules or engine sources can change during reuse. Uncertainty,
-attribution, frozen entries and retest requirements are numerically reconciled
-to verified evidence. Actual separate-provider retesting remains pending.
-
-The subsequently added SEC feasibility module changes the live research source
-set. Exact prior sources are preserved at `local/frozen-stock-source-2026-10-03/`
-with all 43 registered hashes; use the [archived verification/retest commands](INDEPENDENT_DATA_RETEST.md#preserve-and-execute-the-original-procedure)
-against `local/stock-campaign-2026-10-03-finalized/`. Original plans stay unchanged.
-The new [fundamental audit](FUNDAMENTAL_RESEARCH.md) is component feasibility,
-not a strategy campaign or qualification. Its 81 proposed trials remain unrun
-until accounting, shares, original-filings and coverage gates are satisfied.
-
-The [original-filing reconciliation](FUNDAMENTAL_RECONCILIATION.md) adds 37 tests
-for original XML/inline numbers, reviewed formulas, exact-date shares,
-contradictory contexts and changed/resealed evidence. The then-current suite totaled
-**357 passing tests**. Three review findings now have regression coverage:
-aggregate/original disagreements block coverage; failed annual documents cannot
-select an older score; component-context conflicts block the affected measure.
-Independent review found no remaining critical/important issue in this bounded
-research stage. Original component agreement is distinct from accounting
-comparability, share/preferred qualification and strategy validation.
-The first real audit also exposed an incorrectly hand-shaped split fixture;
-the corrected test uses the actual serialized `Split.session` schema. The failed
-registration/sources are preserved and the separate v2 audit reuses unchanged
-original inputs. No strategy results were produced by the failed attempt.
-Its verified source/report is also retained: the final v3 audit reconciles
-consistent rounded GAAP and exact DEI share observations using declared
-accuracy intervals. It never resolves a true conflict by tag preference;
-tests use realistic counts in both input orders and retain basis-unqualified
-status. No performance results inform that data correction.
-
-## Research status
-
-Dated SEC evidence is consolidated in [research status](RESEARCH_STATUS.md). The qualification criteria and frozen studies remain unchanged. Nominee-only crosschecks explicitly retain original search bindings and do not claim to repeat the full candidate search. New audit corrections are documented in [audit remediation](AUDIT_REMEDIATION.md).

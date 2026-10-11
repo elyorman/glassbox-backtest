@@ -1,14 +1,13 @@
 # Rule-based strategies
 
-Implemented Stage 4 foundation, updated 2026-10-03. Five candidate families
-(the original ten recipes plus a separately registered stock campaign) and
-three benchmark families run through the shared-cash backtester. Synthetic
-tests verify engineering behavior; exposed-data exploratory trials do not
-establish production qualification or an untouched holdout.
+The strategy engine: rule families, allocation profiles, causal features and
+the audit contract shared by every strategy. The six research families below
+were built for the 2026-10 studies; the V1 built-in plans (see
+[the roadmap](ROADMAP.md)) are added on this contract and qualify under
+[the evidence standard](STRATEGY_EVIDENCE.md).
 
 ## Research basis and exact rules
 
-The hypotheses and bounded comparison sets come from [the research plan](RESEARCH_PLAN.md).
 Jegadeesh/Titman study stock winner/loser momentum; Moskowitz/Ooi/Pedersen study
 own-return momentum in futures; George/Hwang study nearness to the 52-week high.
 These motivate different hypotheses rather than identify our best strategy.
@@ -249,29 +248,5 @@ outstanding. No
 development, selection-validation or locked-final market-performance period
 has been consumed by this implementation.
 
-Separate private research on 2026-10-03 compared all ten predefined recipes
-without tuning on a fixed nine-sector-ETF sample. The common-warmup comparison
-starts on 2017-01-31; the original decade and cost/delay sensitivities remain
-visible. See [the full evidence and limitations](RESEARCH_PLAN.md#all-predefined-strategy-comparison).
-These already inspected dates, including 2024–2026, cannot support a fresh
-holdout claim. No recipe or ATR-protected variant has been qualified for
-production by this exploratory comparison.
-
-## Bounded stock research and incomplete actions
-
-The [stock campaign](RESEARCH_PLAN.md#next-stock-campaign-implementation--authorized-2026-10-03)
-registers four distinct parents and one neighbor each, separately from the
-original ten-recipe ETF search. `initial_recipes()` still returns its original
-ten configurations; neighbors and benchmarks do not count toward V1's three
-to four qualified strategies. Low-volatility ranking adapts the
-[low-risk anomaly research](https://www.hbs.edu/ris/Publication%20Files/Benchmarks%20as%20Limits%20to%20Arbitrage_4c97001f-33d4-426e-8c74-6fbc00b3482e.pdf);
-it is not a replication or a minimum-variance optimizer.
-
-Strict runs require declared complete actions. An explicit
-`allow_incomplete_diagnostic` action policy now permits strategy execution on
-unqualified snapshots while preserving `actions_complete=false` and visible
-manifest warnings. This supports private data diagnosis, never qualification.
-Missing dividend payment dates in the stock pilot use a disclosed receivable
-convention that withholds the cash until beyond the sample; the unknown actual
-payment dates are preserved. Unsupported spinoffs exclude the affected stocks
-before performance; no fake cash substitute or return-based replacement occurs.
+Exploratory comparisons of these recipes are recorded in
+[the research ledger](RESEARCH_LEDGER.md); none qualified a built-in.

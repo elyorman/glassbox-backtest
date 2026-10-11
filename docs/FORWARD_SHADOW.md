@@ -3,9 +3,12 @@
 The original 22-stock SMA200 recipe is registered on October 5, 2026 for local,
 prospective monthly signal tracking. This supports PR-06, PR-08 and PR-13.
 It places no broker orders and makes no production-strategy claim.
-The [broader transfer study](UNIVERSE_TRANSFER.md) subsequently rejects SMA200
-under its full fold-stability rule. Preserve that finding: this journal continues
-as an operational timing/explainability experiment, not endorsement of an edge.
+The broader 47-stock transfer study (research ledger, 2026-10-05) rejected
+SMA200 under its fold-stability rule. Preserve that finding: this journal
+continues as an operational timing/explainability experiment, not endorsement
+of an edge. Its runtime is the frozen archive under `local/`; the live
+repository no longer contains the research scripts it uses (git tag
+`archive/research-2026-10`).
 
 The journal uses the **exact original recipe**: SMA200, monthly close signals,
 95% invested fraction divided over the 22 fixed slots, minimum price $5,

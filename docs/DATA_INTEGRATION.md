@@ -5,9 +5,9 @@ normalization, exact values, identity/calendar boundaries, provenance and local
 integrity. They do not establish live-provider reliability, historical coverage,
 licensing, empirical strategy quality or release readiness.
 
-Version 0.5.1 adds [saved split/dividend auditing and frozen input preflight](DATA_QUALIFICATION.md).
-It produces reviewed action proposals and concrete unresolved rows without
-automatically qualifying their coverage or the account.
+The `eodhd_actions` module audits saved split/dividend responses into
+reviewed action proposals with unresolved rows listed; it does not qualify
+coverage by itself.
 
 ## EODHD price semantics
 
