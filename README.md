@@ -1,67 +1,48 @@
 # Quantitative Research Platform
 
-Local daily US equity and ETF research software under development. [PROJECT.md](PROJECT.md) defines the product scope and commercial release requirements.
+Local-first research software for US ETFs and equities: built-in investment
+plans with an honest track record, a realistic backtester, risk and sizing,
+and a monthly order sheet that says what to buy and why. Everything runs on
+the user's computer with the user's own data key.
 
-Continuing from another account? Start with the [repository handoff](docs/HANDOFF.md).
-Source, tests and methods are in Git; credentials and generated research/data
-under `local/` remain on the existing machine and are absent from a fresh clone.
+The goal: **strong enough that a quant can audit it, simple enough that a smart
+non-trader can use it in ten minutes.**
 
-The product promise is **serious quantitative stock research with
-institutional-style validation and risk discipline, without requiring coding or
-trust in a black box**. The intended workflow combines discovery, explanation,
-realistic testing, robustness, risk/sizing and local saved evidence. Desktop
-includes no-code rule-based strategy creation and perpetual purchased-version
-use; Developer/Source adds source access and model training. Third-party data
-and optional major upgrades may cost separately. The [15 requirement groups](PROJECT.md#product-requirements-and-acceptance-contract)
-define acceptance criteria; they describe the product we must deliver, not
-capabilities already completed by the current engine.
+- [PROJECT.md](PROJECT.md): product requirements, commercial model, decisions.
+- [Roadmap](docs/ROADMAP.md): the V1 tester release, build order and status.
+- [Evidence standard](docs/STRATEGY_EVIDENCE.md): how a built-in plan qualifies.
+- [Research ledger](docs/RESEARCH_LEDGER.md): every study, including failures.
 
-V1 must include **3–4 distinct, well-researched built-in strategies** (minimum
-three; target four), ready for no-code use. They qualify under
-[the built-in strategy evidence standard](docs/STRATEGY_EVIDENCE.md): disclosed
-evidence packs with uncertainty and limitations, no return, Sharpe or
-benchmark-beating threshold. V1 built-ins are ETF-based (candidates:
-multi-asset trend, dual momentum, sector rotation, inverse-volatility
-allocation). **No built-in is qualified yet.**
+## What exists
 
-The agreed build order is:
-
-1. Market-data layer
-2. Backtester
-3. Risk/money management
-4. Strategies
-5. Validate strategies
-6. ML models
-7. Scanner/analytics
-8. Desktop UI
-9. Packaging/licensing/website
-
-## Status
-
-| Stage | State |
+| Area | State |
 | --- | --- |
-| 1 Data | Built: CSV/JSON/Parquet snapshots, EODHD import, dated index membership, action audit. Open: provider qualification, DuckDB query storage, memory and speed at index scale (all bars load as Python Decimal objects). |
-| 2 Backtester | Built: next-open execution, shared cash, costs, splits/dividends/delistings, stops, audit bundles. Open: target/trailing exits, entry-to-exit trade records. |
-| 3 Risk/sizing | Built. |
-| 4 Strategies | Six research families implemented. ETF built-ins: not started. |
-| 5 Validation | Campaign framework built; evidence-pack generator not started. |
-| 6–9 | Not started. |
+| Market data | CSV/JSON/Parquet snapshots, EODHD import with provider adjustment cross-check, data-quality checks, dated index membership. Tiingo adapter: next. |
+| Backtester | Next-open fills, shared cash, costs, splits/dividends/delistings, stops, full audit bundles. |
+| Risk and sizing | Position, cash, exposure, liquidity and drawdown limits; fixed, fractional and ATR sizing; every refusal recorded. |
+| Strategies | Six research rule families. The five V1 plans: not built yet. |
+| Validation | Campaign framework, stationary bootstrap, cost and period breakdowns. Evidence-pack report: not built yet. |
+| ML, order sheet, Rewind, UI, packaging | Not started; see the roadmap. |
 
-Research history, including every failed study and the cumulative trial
-count, is in [the research ledger](docs/RESEARCH_LEDGER.md). Detailed
-contracts: [data layer](docs/DATA_LAYER.md), [backtester](docs/BACKTESTER.md),
+Contracts: [data layer](docs/DATA_LAYER.md), [data integration](docs/DATA_INTEGRATION.md),
+[universes](docs/UNIVERSES.md), [backtester](docs/BACKTESTER.md),
 [risk](docs/RISK_MANAGEMENT.md), [strategies](docs/STRATEGIES.md),
-[validation](docs/VALIDATION.md), [data integration](docs/DATA_INTEGRATION.md),
-[universes](docs/UNIVERSES.md), [reproducibility](docs/REPRODUCIBILITY.md).
-Historical research findings: [research status](docs/RESEARCH_STATUS.md).
+[validation](docs/VALIDATION.md), [reproducibility](docs/REPRODUCIBILITY.md).
 The SMA200 [forward signal journal](docs/FORWARD_SHADOW.md) has its first
 capture window after the 2026-10-30 close.
+
+Research from October 2026 (stock campaigns, SEC fundamentals studies, their
+scripts and reports) was removed from the working tree; the git tag
+`archive/research-2026-10` keeps it, and the ledger records every outcome.
 
 ## Development
 
 ```bash
 python3 -m venv .venv
-PYTHONPATH=python .venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m pip install -e '.[parquet]'
+PYTHONPATH=python .venv/bin/python -m unittest discover -s tests
 ```
 
-Keep downloaded data and generated artifacts in ignored `local/` storage. Never put API credentials or third-party research datasets in Git.
+Credentials go in `.env` (gitignored; see `.env.example`). Downloaded data and
+generated artifacts go in the ignored `local/` directory. Never commit
+credentials or third-party datasets.

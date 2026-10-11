@@ -2,19 +2,20 @@
 
 ## Project Summary
 
-Build a commercial, local-first **Quantitative Trading Research & Risk Platform for U.S. equities and ETFs**.
+Build a commercial, local-first **Quantitative Trading Research & Risk Platform
+for U.S. equities and ETFs**. It helps a trader make systematic, reproducible
+decisions under uncertainty and does **not** claim to predict markets with
+certainty. Its value is the disciplined combination of strategy research,
+market scanning and cross-sectional ranking, portfolio-aware backtesting,
+out-of-sample and robustness validation, deterministic risk management,
+money/position management, and transparent analytics with trade-level
+auditability.
 
-The product helps a trader make systematic, reproducible decisions under uncertainty. It does **not** claim to predict markets with certainty. Its value is the disciplined combination of:
-
-- quantitative alpha/strategy research;
-- market scanning and cross-sectional ranking;
-- portfolio-aware backtesting;
-- out-of-sample and robustness validation;
-- deterministic risk management;
-- money/position management;
-- transparent analytics and trade-level auditability.
-
-V1 is the first paid production release, not an MVP/demo.
+V1 is the first paid production release, not an MVP/demo; its scope may be
+narrow but not provisional. A tester release comes first (see **V1 Tester
+Release**). Build order and status are in [the roadmap](docs/ROADMAP.md). Every
+past study, including failures, is in [the research ledger](docs/RESEARCH_LEDGER.md);
+the git tag `archive/research-2026-10` keeps the removed research documents and scripts.
 
 ## Product Positioning and Differentiation
 
@@ -26,14 +27,10 @@ The customer-facing message is:
 
 > **Find better opportunities. Test them properly. Understand the risk. Make more disciplined decisions.**
 
-The product combines stock discovery, realistic portfolio testing, robustness
-evaluation, risk controls, understandable position sizing, explainable
-strategies/ML rankings, local research storage and a one-time software purchase.
-Market it as a quantitative stock research platform; ML is a supporting
-capability, not the product identity or a promise of market prediction.
-
-The intended gap is between retail simplicity and quantitative rigor. Reasons
-to choose the finished product should be:
+Market it as a quantitative stock research platform, not AI trading software;
+ML is a supporting capability, not the product identity or a promise of market
+prediction. The intended gap is between retail simplicity and quantitative
+rigor. Reasons to choose the finished product should be:
 
 - easier to use than assembling and maintaining a Python quant stack;
 - more rigorous than a simple signal backtest, with shared portfolio cash,
@@ -41,28 +38,26 @@ to choose the finished product should be:
 - validation-first, with chronological OOS/walk-forward, parameter sensitivity,
   cost stress and regime checks explained in plain language;
 - stock discovery, testing, risk and sizing in one consistent workflow;
-- 3–4 well-researched built-in strategies with disclosed evidence packs, and validated ML
-  rankings, with inspectable inputs, rules, scores and decisions;
+- well-researched built-in plans, rule-based and ML-ranked, with disclosed evidence packs, and
+  validated ML rankings, with inspectable inputs, rules, scores and decisions;
 - no-code rule-based strategy creation in Desktop;
 - local-first research and private customer data, without recurring cloud lock-in;
 - no mandatory software subscription; the purchased major version is perpetual;
 - source access, extension capability and the model-training pipeline in
   Developer/Source Edition.
 
-These are product commitments to demonstrate through acceptance evidence and
-user evaluation, not verified claims of superiority over every competitor.
-"Institutional-style" refers to validation/accounting/risk discipline; it does
-not promise institutional data, execution access, certification or returns.
-"Explainable" means users can inspect the basis, scope and limitations of an
-output; model explanations are not proof of causality or predictive certainty.
-Third-party data may require its own subscription, and future major software
-versions may be optional paid upgrades under the commercial policy below.
+These are commitments to demonstrate through acceptance evidence and user
+evaluation, not verified claims of superiority over every competitor.
+"Institutional-style" refers to validation, accounting and risk discipline, not
+institutional data, execution access, certification or returns. "Explainable"
+means users can inspect the basis, scope and limitations of an output; model
+explanations are not proof of causality or predictive certainty.
 
 ## Product Philosophy
 
-There is no “magic” algorithm that knows what happens next. The system should reduce avoidable decision errors by making rules explicit, testable, repeatable, and measurable.
-
-The application should answer questions such as:
+There is no “magic” algorithm that knows what happens next. The system should
+reduce avoidable decision errors by making rules explicit, testable, repeatable,
+and measurable. It should answer questions such as:
 
 - What exactly caused this candidate to rank highly?
 - What would the strategy have done historically using only information available at the time?
@@ -72,15 +67,44 @@ The application should answer questions such as:
 - What happens if risk per trade, stops, slippage, or portfolio constraints change?
 - How does it compare with a relevant benchmark and with simpler strategies?
 
+## V1 Tester Release
+
+Decided 2026-10-08 to 2026-10-11. The first release goes to a small group of
+testers. It must show the product's value end to end, honestly, on one data
+provider and one platform. The full V1 scope in this document remains the
+commercial target; [the roadmap](docs/ROADMAP.md) holds build order and status.
+
+- **Five built-in plans**, each qualified under
+  [the evidence standard](docs/STRATEGY_EVIDENCE.md): four rule-based ETF plans
+  (multi-asset trend, dual momentum, US sector rotation, inverse-volatility
+  allocation) and one **ML-ranked ETF rotation**.
+- The ML plan ranks ETFs by expected relative next-month return. It is trained
+  chronologically, compared against the plain rule, shown as ranks (never
+  probabilities) and shipped as a fixed, versioned model. Customers do not
+  retrain it.
+- **"This month"**: what to buy today for a new account, then each month's
+  changes, as an order sheet with share counts and the reason for each line.
+- **"Rewind"**: import the user's own trade history and compare it, honestly,
+  with a plan on the same cash flows. The comparison must be able to say the
+  user did better.
+- Trader view by default, Analyst view on demand (see **UI Direction**).
+- Monthly decisions (weekly optional) on daily data; no intraday.
+- Data: Tiingo only, with the user's own key (see **Data Provider Strategy**).
+- Platform: local web app (Python server plus browser) on the user's machine;
+  Windows build first, produced by GitHub Actions.
+- Nothing leaves the user's machine: no account, no telemetry, no trading.
+
+Deferred past the tester release: Developer/Source edition, customer model
+training, the visual strategy builder, stock screener, index universes, EODHD
+and CSV/Parquet adapters, licensing and storefront, and in-app or paper trading.
+
 ## Product Requirements and Acceptance Contract
 
-Confirmed with the user on **2026-10-03**. The following 15 groups are the
-product acceptance contract. The subsystem sections below detail how to deliver
-them; the development-stage notes describe current progress, not completion of
-these requirements. Every substantial feature must identify the requirement
-IDs it supports and the evidence that demonstrates its usefulness and
-correctness. Features that do not improve usefulness, trust, usability or
-decision quality should be questioned.
+Confirmed with the user on **2026-10-03**. These 15 groups are the product
+acceptance contract; the sections below detail how to deliver them. Every
+substantial feature must identify the requirement IDs it supports and the
+evidence that demonstrates its usefulness and correctness. Features that do not
+improve usefulness, trust, usability or decision quality should be questioned.
 
 ### PR-01 — Reliable Data Handling
 
@@ -122,22 +146,20 @@ calculation/reason for the selected quantity.
 
 ### PR-05 — Strategy Quality
 
-V1 must ship **3–4 distinct, well-researched built-in strategies** (minimum
-three; target four), usable without coding. The qualification and delivery
-contract is [the built-in strategy evidence standard](docs/STRATEGY_EVIDENCE.md),
-summarized under **Reference Strategies** below. Research
-tools and user-created strategies do not substitute for this built-in offering.
+V1 must ship **at least three distinct rule-based built-ins (target four) plus
+the ML-ranked rotation**, usable without coding and qualified under
+[the evidence standard](docs/STRATEGY_EVIDENCE.md) (see **Reference Strategies**).
+Research tools and user-created strategies do not substitute for them.
 
 A profitable historical backtest alone does not establish usefulness. Evaluate
 the economic/behavioral hypothesis, expectancy after costs, CAGR/annual return,
 drawdown, Sharpe/Sortino/Calmar, adequate trade count, period/universe/regime
 stability, small parameter changes, OOS results and appropriate benchmarks.
-There is no universal 20% CAGR pass requirement. CAGR around 15–20%+, drawdown
-around 20–25% or lower, Sharpe around/above 1 and Calmar around/above 1 are
-illustrative research targets only; they are neither promises nor automatic
-pass/fail gates. Robustness has priority over maximizing historical return.
-For built-ins these metrics are disclosed in the evidence pack; they do not
-decide inclusion and are never used to select among registered configurations.
+CAGR around 15–20%+, drawdown around 20–25% or lower, and Sharpe and Calmar
+around/above 1 are illustrative research targets only, never promises or
+pass/fail gates. Robustness has priority over maximizing historical return. For
+built-ins these metrics are disclosed in the evidence pack; they never decide
+inclusion or select among registered configurations.
 
 ### PR-06 — Strategy Validation
 
@@ -249,110 +271,129 @@ an attractive backtest or mandatory use of ML.
 | PR-13, PR-14 | All stages | Reproducible runs, provenance/integrity tests and verified absence of research-data uploads. |
 | PR-15 | All stages and 9: Release | Real-user usefulness/usability evidence and a supported requirement for each shipped feature. |
 
-The nine-stage build order remains unchanged. This contract is not a claim
-that the current CLI, ETF experiments or test suite already deliver the complete
-stock-research desktop product. Engine correctness, empirical strategy/model
-qualification and customer-facing usability are separate evidence requirements.
+Engine correctness, empirical strategy/model qualification and customer-facing
+usability are separate evidence requirements; passing engine tests does not
+deliver the product promise.
 
 ## Commercial Model
 
-The product is sold primarily as **perpetual desktop software**, not SaaS. The business model deliberately separates ordinary use, source access, and commercial redistribution.
+The product is sold primarily as **perpetual desktop software**, not SaaS,
+deliberately separating ordinary use, source access and commercial
+redistribution. Prices and counts below are market-test hypotheses that may
+change before launch; they live in commercial configuration, never in quant logic.
 
 ### Desktop Edition
 
-The standard paid product includes:
+The packaged Windows/Linux application with official production
+strategies/model artifacts; scanner, strategy configuration/builder,
+backtesting, validation, risk, sizing, analytics, Trade Explorer, persistence
+and reporting; supported data-provider adapters and local CSV/Parquet import;
+documentation; and a perpetual license to the purchased major version under the
+final EULA. Source code is **not** included. Third-party market data is not
+bundled unless redistribution rights are secured; customers normally bring
+their own API credentials/data.
 
-- packaged Windows/Linux application;
-- official production strategies/model artifacts;
-- scanner, strategy configuration/builder, backtesting, validation, risk, sizing, analytics, Trade Explorer, persistence, and reporting;
-- supported data-provider adapters and local CSV/Parquet import;
-- documentation;
-- a perpetual license to the purchased major version under the final EULA.
-
-Source code is **not** included. Third-party market data is also not bundled unless redistribution rights are explicitly secured. Customers normally bring their own API credentials/data.
-
-**Current pricing hypothesis:** $599 normal price; **$399 Early Bird price while the shared Founding Customer pool remains open**. The storefront should show the normal price alongside the current Early Bird price. These numbers remain market-test hypotheses and may change before launch; pricing belongs in commercial configuration, not quant logic.
+**Pricing hypothesis:** $599 normal; **$399 Early Bird while the shared Founding
+Customer pool remains open**. The storefront shows both prices together.
 
 ### Developer / Source Edition
 
-Offer a separate Source Edition for technical users who value inspectability, extension, and private/internal modification. The intended package includes the Desktop product plus application/platform source code, build instructions, tests, architecture documentation, and extension documentation.
+For technical users who value inspection, extension and private/internal
+modification: the Desktop product plus application/platform source code, build
+instructions, tests, architecture and extension documentation. The V1 edition
+**includes the production-model training pipeline**. Proprietary third-party
+training datasets are excluded unless redistribution rights are secured;
+internal research artifacts are included only when deliberately approved.
 
-**Current pricing hypothesis:** $2,499 normal price; **$1,499 Early Bird price while the shared Founding Customer pool remains open**. The storefront should show both prices clearly. Pricing remains configurable commercial metadata.
+**Pricing hypothesis:** $2,499 normal; **$1,499 Early Bird while the shared
+Founding Customer pool remains open**. The storefront shows both prices clearly.
 
-The final source license should permit the agreed internal/private use and modification while **not** granting redistribution, sublicensing, resale, OEM, or competing commercial-product rights. Commercial/OEM redistribution is negotiated separately.
-
-The **production-model training pipeline is included in the V1 Developer/Source Edition**, enabling technical buyers to train and modify their own models. Proprietary third-party training datasets are not included unless redistribution rights are explicitly secured. Internal research artifacts may be packaged only when deliberately approved for that edition.
+The final source license permits the agreed internal/private use and
+modification but **not** redistribution, sublicensing, resale, OEM, or
+competing commercial-product rights.
 
 ### Founding Customer / Early Bird Offer
 
-The Early Bird offer uses **one shared pool across Desktop and Developer/Source**: the first **50 unique paying customers** qualify, regardless of which paid edition they buy. A customer purchasing multiple editions/licenses still counts once toward the 50-customer pool.
-
-The storefront should display the offer live, for example `34 / 50 claimed`, together with the struck-through/reference normal price and current Early Bird price. The counter advances only for completed qualifying purchases, not trial downloads, email registrations, or abandoned checkouts. When customer #50 qualifies, Early Bird pricing ends rather than resetting into another artificial scarcity campaign.
-
-The count and prices are commercial configuration/state, not quant-engine logic.
+One shared pool covers Desktop and Developer/Source: the first **50 unique
+paying customers** qualify, whichever paid edition they buy, and a customer
+buying several editions/licenses counts once. The storefront shows a live
+counter (for example `34 / 50 claimed`) with the reference normal price and the
+current Early Bird price. Only completed qualifying purchases advance it, not
+trial downloads, email registrations or abandoned checkouts. At customer #50
+Early Bird pricing ends; it never resets into another artificial scarcity campaign.
 
 ### OEM / Commercial Redistribution
 
-No fixed public price initially. Handle commercial embedding, redistribution, white-labeling, fund/company deployment beyond standard terms, or OEM rights as negotiated agreements.
+No fixed public price initially. Commercial embedding, redistribution,
+white-labeling, fund/company deployment beyond standard terms, and OEM rights
+are negotiated agreements.
 
 ### Evaluation Edition
 
-The evaluation experience is a core sales mechanism, especially for skeptical/technical traders. It must allow the prospect to verify the product rather than merely view a demo.
-
-**Settled requirements:**
+The evaluation is a core sales mechanism, especially for skeptical/technical
+traders: the prospect verifies the product rather than views a demo.
 
 - **14 days from first activation**;
-- same application/codebase and same Desktop capabilities as the paid Desktop Edition;
+- same application/codebase and Desktop capabilities as the paid Desktop Edition;
 - no artificial limits on tickers, backtest period, trade count, supplied strategies/models, strategy configuration, validation, Trade Explorer, or exports;
-- supports the prospect's own market-data API credentials and local datasets;
+- supports the prospect's own market-data credentials and local datasets;
 - all local projects, cached data, configurations, and prior results survive expiration;
-- purchase converts/unlocks the existing installation without requiring reinstall or loss of work;
+- purchase unlocks the existing installation without reinstall or loss of work;
 - evaluation is non-commercial under the final license terms.
 
-After expiry the application should stop new research execution (exact expired/read-only UX to be finalized) while preserving the user's work. Trial enforcement should be reasonable but must not become an elaborate DRM project.
-
-A verification/reference project and evaluation checklist should ship with the product so a prospect can reproduce a known backtest, inspect trades, alter costs/slippage/stops, test difficult periods, run walk-forward/OOS analysis, connect their own data, and independently recalculate selected P&L results.
+After expiry the application stops new research execution (exact
+expired/read-only UX to be finalized) while preserving the user's work. Trial enforcement should be
+reasonable, not an elaborate DRM project. A verification/reference project and
+evaluation checklist ship with the product so a prospect can reproduce a known
+backtest, inspect trades, alter costs/slippage/stops, test difficult periods,
+run walk-forward/OOS analysis, connect their own data, and independently
+recalculate selected P&L results.
 
 ### Updates & Major Versions
 
-Do **not** promise “12 updates,” monthly releases, lifetime updates, or indefinite support.
-
-The intended policy is:
-
-- the purchased major version is perpetual and does not expire;
-- maintenance/bug-fix/minor releases for that major version are included while that major version remains supported;
-- future major versions may be optional paid upgrades;
-- releasing V2 must not remotely disable V1;
-- support lifecycle and upgrade pricing must be published before broad public sale.
+Do **not** promise “12 updates,” monthly releases, lifetime updates, or
+indefinite support. The purchased major version is perpetual and does not
+expire; its maintenance/bug-fix/minor releases are included while it remains
+supported; future major versions may be optional paid upgrades; releasing V2
+must not remotely disable V1. Publish the support lifecycle and upgrade pricing
+before broad public sale.
 
 ### V1 Editions & Distribution
 
-V1 must be commercially deliverable in **three forms at launch**: Evaluation, Desktop, and Developer/Source. Customer #1 may purchase either paid edition; Developer/Source must therefore be genuinely shippable rather than a future promise.
+Commercial V1 is deliverable in **three forms at launch**: Evaluation, Desktop,
+and Developer/Source. Customer #1 may buy either paid edition, so
+Developer/Source must be genuinely shippable. The lightweight storefront uses:
 
-V1 should also include a lightweight public download/storefront experience. Preferred architecture:
+- **Vercel** for the public product/pricing/download frontend;
+- **Supabase** for verified-email flow, paid customer accounts and license/entitlement/purchase metadata only;
+- **Cloudflare R2** for private storage of Windows/Linux installers, release artifacts and protected source archives.
 
-- **Vercel**: public product/pricing/download frontend;
-- **Supabase**: verified-email flow, paid customer accounts, license/entitlement/purchase metadata only;
-- **Cloudflare R2**: private object storage for Windows/Linux installers, release artifacts, and protected Developer/Source archives;
-- **customer computer only**: market data, API credentials, portfolios, positions, strategies, backtests, trade history, models/model inputs, research projects, caches, and other trading/research data.
+**Privacy invariant:** market data, API credentials, portfolios, positions,
+strategies, backtests, trade history, models/model inputs, research projects
+and caches stay on the customer's computer. They are **never** uploaded to or
+stored in Supabase, R2, Vercel, telemetry or another product backend. This is a
+product invariant, not a V1 shortcut.
 
-Customer trading/research data must **never** be uploaded to or stored in Supabase, R2, Vercel, or another product backend. This is a product/privacy invariant, not merely a V1 shortcut.
+Evaluation: Download Evaluation → email → verification → short-lived authorized
+download → install the same Desktop application → 14 days from first
+activation; no full account required.
+Paid purchases create an account for software ownership, entitlements,
+downloads, license information, documentation and releases, never for trading
+data. Downloads use short-lived/signed authorization, not permanent public URLs.
+No sophisticated updater is needed; the application may point to the
+authenticated download page. Manual delivery/licensing is an acceptable fallback
+for customer #1, but the storefront path is part of the V1 target. Custom
+strategies, models, data adapters and broker integrations are separate paid services.
 
-Evaluation download flow: visitor clicks Download Evaluation → supplies an email → verifies the email → receives/accesses a short-lived authorized download → installs the same Desktop application → 14-day evaluation begins on first activation. No full account is required merely to evaluate.
+### Early Acquisition
 
-Paid Desktop/Developer flow: payment and email establish the customer's account/entitlement; authenticated access provides eligible installers/source packages, license information, documentation, and release history. Paid accounts exist for software ownership/distribution, not for storing trading data.
-
-Release buckets should remain private; downloads should use short-lived/signed authorization rather than permanent public object URLs. A sophisticated automatic updater is not required initially; the application may check for an eligible newer release and direct the customer to the authenticated download page.
-
-For customer #1, manual delivery/payment/license issuance remains an acceptable fallback if the storefront is not ready, but the lightweight storefront/distribution path is part of the V1 product target.
-
-Custom strategy implementation, custom models, data-provider adapters, broker integrations, and related professional work are separate paid services rather than entitlements of the base Desktop license.
+After customer #1 and the tester round, seek technically serious evaluators in
+quant/systematic communities before paid advertising, leading with reproducible
+research produced by the product rather than return claims.
 
 ## Target Customer
 
-Primary V1 customer profile:
-
-- serious retail/professional-adjacent stock trader or investor who should not
+- a serious retail/professional-adjacent stock trader or investor who should not
   need coding or quantitative-finance expertise;
 - understands that backtests do not guarantee future performance;
 - wants systematic research rather than “AI stock picks”;
@@ -360,960 +401,347 @@ Primary V1 customer profile:
 - may already have a market-data subscription or historical dataset.
 
 Developer/Source additionally serves technical users who want source access,
-custom extensions and model training; those skills are not a Desktop prerequisite.
-
-The first customer is also a useful design partner, but receives the same core commercial product intended for subsequent customers rather than a one-off custom script.
+custom extensions and model training. The first customer is also a design
+partner but receives the same core product as later customers, not a one-off script.
 
 ## V1 Asset Coverage
 
-### Asset class
+- **Assets:** U.S. listed equities and major U.S.-accessible ETFs.
+- **Frequency:** daily bars; intraday/tick data is deferred.
+- **Built-in universes:** S&P 500 (primary large-cap reference), Nasdaq-100,
+  Russell 1000 (subject to data/licensing feasibility), major ETFs
+  (broad-market, sector, style/asset-allocation), and custom watchlists (pasted
+  tickers and/or CSV).
+- **Benchmarks** are chosen independently of the trading universe: S&P 500 and
+  Nasdaq-100 proxy/index data and custom tickers; Russell once licensing/coverage
+  is confirmed.
 
-- U.S. listed equities
-- major U.S.-accessible ETFs
-
-### Frequency
-
-- daily bars
-
-Intraday/tick data is explicitly deferred.
-
-### Built-in universes
-
-V1 should support:
-
-1. **S&P 500** — primary reference large-cap universe.
-2. **Nasdaq-100** — concentrated growth/technology-heavy universe.
-3. **Russell 1000** — broader large/mid-cap opportunity universe, subject to data/licensing feasibility.
-4. **Major ETFs** — broad-market, sector, style/asset-allocation instruments as appropriate.
-5. **Custom universe/watchlist** — paste tickers and/or import CSV.
-
-Universe selection and tradability filters are separate concepts.
-
-Example flow:
-
-```text
-Russell 1000 point-in-time membership
-              ↓
-Tradability filters
-(price / volume / dollar volume / history)
-              ↓
-Strategy/model eligibility
-              ↓
-Cross-sectional ranking
-              ↓
-Portfolio/risk constraints
-              ↓
-Orders/positions
-```
-
-### Historical membership
-
-For index-based historical tests, use point-in-time membership when available. Never silently use today's constituents throughout history.
-
-If a provider cannot supply a survivorship-aware universe, the UI/report must clearly disclose the limitation.
-
-### Benchmarks
-
-Benchmark is selected independently of trading universe. Initial benchmark options should include:
-
-- S&P 500 proxy/index data;
-- Nasdaq-100 proxy/index data;
-- custom benchmark ticker/data where supported.
-
-Russell benchmark support can be added when licensing/data coverage is confirmed.
+Universe membership, tradability filters, strategy eligibility, ranking and
+portfolio/risk constraints are separate stages. Use point-in-time membership
+for index-based historical tests when available, never today's constituents
+silently applied to history, and disclose when a provider cannot supply a
+survivorship-aware universe.
 
 ## V1 User Experience
 
-A normal customer should not need Python, a terminal, Docker, or ML knowledge.
-
-Expected onboarding:
-
-```text
-Install application
-      ↓
-Launch
-      ↓
-Configure market-data API key OR local dataset
-      ↓
-Download/validate/cache data
-      ↓
-Choose universe + strategy/model
-      ↓
-Scan / backtest / validate
-```
-
-The product should feel like a quantitative research workstation rather than a collection of scripts.
-
-The primary workflow is **discover → understand → test → validate → assess
-risk/size → save evidence**. User-facing decisions and explanations must satisfy
-PR-07 through PR-12; advanced details are available through drill-down.
+A normal customer needs no Python, terminal, Docker, or ML knowledge:
+install → configure a market-data key or local dataset → download, validate and
+cache data → choose universe and strategy/model → scan, backtest, validate. The
+primary workflow is **discover → understand → test → validate → assess
+risk/size → save evidence**, satisfying PR-07 to PR-12, with advanced detail in
+drill-downs. It should feel like a research workstation, not a set of scripts.
 
 ## Core V1 Product Areas
 
-### 1. Data Sources & Data Health
-
-Capabilities:
-
-- configure supported market-data provider credentials;
-- import local CSV/Parquet datasets;
-- download/cache historical and current daily data;
-- display download/update status;
-- detect missing/invalid data;
-- expose adjustment/source metadata;
-- manage local cache/storage;
-- show data provenance for saved runs.
-
-### 2. Universe Manager
-
-Capabilities:
-
-- choose built-in universe;
-- choose date-aware historical membership where supported;
-- create/import custom watchlists;
-- apply tradability filters such as minimum price, average daily volume, dollar volume, and minimum trading history;
-- optionally filter by sector/industry when reliable metadata exists.
-
-### 3. Strategy / Alpha Engine
-
-The engine must support both deterministic strategies and ML-assisted ranking.
-
-Conceptual pipeline:
+Every strategy, ML ranking and portfolio decision flows through one pipeline:
 
 ```text
-Universe
-  ↓
-Tradability
-  ↓
-Features
-  ↓
-Strategy / Alpha Model
-  ↓
-Candidate Score / Rank
-  ↓
-Entry/Exit Rules
-  ↓
-Risk Engine
-  ↓
-Sizing
-  ↓
-Portfolio
+Universe → Tradability → Features → Strategy / Alpha Model → Score / Rank
+  → Entry/Exit Rules → Risk Engine → Sizing → Portfolio
 ```
 
-Strategies should be configurable rather than hard-coded into UI logic.
-
-Desktop includes the PR-12 no-code visual strategy builder: supported universe,
-filter, indicator, entry/exit, ranking, sizing and risk components; parameter
-configuration; and save/duplicate/import/export. The saved strategy definition
-is shared by current/historical scanning, backtesting and validation. Arbitrary
-code extensions are a Developer/Source capability, not required for Desktop use.
-
-### 4. Market Scanner
-
-Run the same production strategy/model definitions used by the backtester against the latest available data.
-
-Also support historical scans with dated universe/data inputs and subsequent
-outcome inspection, preserving the same supported filter/strategy definition.
-
-Scanner output should support:
-
-- symbol;
-- rank/score;
-- strategy/model that generated it;
-- relevant feature/condition explanation;
-- risk/volatility context;
-- reason a candidate qualified or was rejected;
-- drill-down into historical behavior/backtest where practical.
-
-Do not represent an arbitrary ranking score as a probability.
-
-### 5. Portfolio Backtester
-
-The backtester is a first-class product, not a charting afterthought.
-
-Required behavior:
-
-- portfolio-level cash and positions;
-- simultaneous positions;
-- explicit signal vs execution timing;
-- next-session execution semantics for daily strategies;
-- configurable fees and slippage;
-- stop/target/trailing/time-based exits;
-- rejected orders and insufficient-capital handling;
-- position sizing and portfolio constraints;
-- benchmark comparison;
-- complete trade/order ledger;
-- deterministic reproducibility given identical inputs.
-
-### 6. Risk Engine
-
-Initial controls:
-
-- maximum risk per trade;
-- maximum position size;
-- maximum positions;
-- maximum portfolio exposure;
-- cash reserve;
-- sector/concentration limits;
-- liquidity constraints;
-- drawdown-based risk reduction/stop rules where configured.
-
-Risk decisions should be logged and explainable.
-
-### 7. Money / Position Management
-
-V1 methods:
-
-- fixed allocation;
-- equal weighting;
-- fixed-fractional risk sizing;
-- ATR/volatility-based sizing.
-
-Future candidates such as volatility targeting, risk parity, or Kelly-derived methods may be researched later.
-
-### 8. Analytics
-
-At minimum:
-
-**Return**
-- total return;
-- CAGR;
-- annual/monthly returns.
-
-**Risk**
-- maximum drawdown;
-- average drawdown with its averaging convention documented;
-- drawdown series;
-- realized volatility;
-- downside deviation;
-- VaR/CVaR only if clearly defined and appropriately caveated.
-
-**Risk-adjusted**
-- Sharpe;
-- Sortino;
-- Calmar.
-
-**Trade statistics**
-- win/loss rate;
-- average winner/loser;
-- payoff ratio;
-- expectancy;
-- profit factor;
-- largest winner/loss;
-- average holding period;
-- consecutive wins/losses;
-- trade count.
-
-**Portfolio**
-- exposure;
-- turnover;
-- cash utilization;
-- concentration.
-
-**Comparison**
-- benchmark return/risk comparison;
-- rolling performance where useful.
-
-### 9. Validation & Robustness
-
-V1 should allow the user to challenge a strategy rather than merely admire its equity curve.
-
-Required capabilities:
-
-- in-sample/out-of-sample separation;
-- chronological validation;
-- walk-forward evaluation;
-- parameter sensitivity;
-- slippage/transaction-cost stress testing;
-- performance by time period/regime;
-- comparison across supported universes where meaningful;
-- comparison with simple baselines/benchmark;
-- plain-language robustness warnings, including insufficient and inconclusive evidence;
-- Monte Carlo/resampling analysis where useful, with the question, method and assumptions stated.
-
-### 10. Trade Explorer
-
-Every historical trade should be inspectable.
-
-Show at least:
-
-- signal date/time;
-- execution date/time;
-- entry price and quantity;
-- entry reason/features/conditions;
-- risk and sizing calculation;
-- stop/target if applicable;
-- exit date/price;
-- exit reason;
-- costs/slippage;
-- realized P&L;
-- strategy/model/configuration version.
-
-### 11. Saved Research
-
-Persist locally:
-
-- strategy configurations;
-- risk/sizing configurations;
-- data-source configuration excluding secrets where inappropriate;
-- saved backtest runs;
-- model metadata;
-- analytics results;
-- provenance manifests.
-
-### 12. Export / Reporting
-
-Support exporting at least:
-
-- trade ledger to CSV;
-- analytics/results to CSV and/or XLSX where useful;
-- a professional backtest report format;
-- reproducibility/provenance manifest.
-
-Exact report format can be finalized during UI/report design.
+| Area | V1 scope | PRs |
+| --- | --- | --- |
+| Data Sources & Data Health | Provider credentials, local CSV/Parquet import, download/cache with update status, missing/invalid-data detection, adjustment/source metadata, cache management, provenance for saved runs. | 01, 13 |
+| Universe Manager | Built-in universes with date-aware membership where supported, custom watchlists, tradability filters (price, average volume, dollar volume, history), sector/industry filters when metadata is reliable. | 01, 07 |
+| Strategy / Alpha Engine | Configurable deterministic strategies and ML-assisted ranking; the no-code visual builder (universe, filters, indicators, entry/exit, ranking, sizing, risk, parameters, save/duplicate/import/export) whose saved definition drives scanning, backtesting and validation. | 05, 10, 12 |
+| Market Scanner | The same definitions as the backtester on the latest data, plus historical scans with outcomes; rank/score, generating strategy/model, explanation, risk context, reason qualified or rejected. | 07, 08 |
+| Portfolio Backtester | Shared cash and simultaneous positions; next-session execution; fees and slippage; stop/target/trailing/time exits; rejected orders; sizing and constraints; benchmark; complete ledger; deterministic results. | 02 |
+| Risk Engine | Risk per trade, position size and count, exposure, cash reserve, sector/concentration, liquidity, drawdown-based reduction; every decision logged and explainable. | 03 |
+| Money / Position Management | Fixed allocation, equal weighting, fixed-fractional risk, ATR/volatility sizing. Volatility targeting, risk parity or Kelly-derived methods may be researched later. | 04 |
+| Analytics | The PR-09 metrics plus trade count, drawdown series, rolling performance where useful, and VaR/CVaR only if clearly defined and caveated. | 09 |
+| Validation & Robustness | In-sample/OOS, walk-forward, parameter sensitivity, cost/slippage stress, period/regime and universe comparisons, simple baselines, plain-language warnings, Monte Carlo/resampling with stated question and assumptions. | 06 |
+| Trade Explorer | Every trade: signal and execution times, price, quantity, reasons, risk and sizing calculation, stop/target, exit, costs, P&L, strategy/model/configuration version. | 02, 08 |
+| Saved Research | Local strategy, risk/sizing and data-source configurations (excluding secrets), runs, model metadata, analytics and provenance manifests. | 13, 14 |
+| Export / Reporting | Trade ledger CSV, results CSV/XLSX where useful, a professional backtest report, the provenance manifest. | 09, 13 |
 
 ## Quant Algorithm / Model Plan
 
-### Core framing
-
-Do not begin by trying to predict exact future stock prices.
-
-The primary research framing is:
+Do not begin by predicting exact future prices. The primary framing is:
 
 > Given information available at date `t`, rank eligible stocks by expected opportunity over a defined forward horizon, then apply deterministic strategy, risk, and money-management rules.
 
-The alpha layer proposes/ranks opportunities. The portfolio/risk layer decides what can actually be traded.
+The alpha layer proposes/ranks opportunities; the portfolio/risk layer decides
+what can be traded.
 
-### Candidate horizons
+- **Horizons:** 5, 10 and 20 trading days; separate production models per
+  horizon only if research shows value.
+- **Targets:** forward raw return; forward excess return vs market/sector;
+  cross-sectional forward-return rank; target-before-stop/barrier outcome.
+  Cross-sectional rank and excess-return targets fit the scanner design best.
+- **Features:** 1–120-day returns, momentum acceleration, distance from recent
+  highs/lows, relative strength; moving-average relationships, slopes and
+  breakouts; ATR, realized/downside volatility and volatility regimes; relative
+  volume, volume trend, dollar volume and liquidity proxies; cross-sectional
+  ranks, market- and sector-relative momentum, sector strength, breadth and
+  market regime. Later: point-in-time fundamentals, earnings/analyst revisions,
+  news/event features.
+- **Tournament, in order:** rule-based baseline; linear/logistic/Ridge/Elastic
+  Net; LightGBM, XGBoost, CatBoost; MLP; LSTM/GRU, with Transformer/TCN only if
+  justified; ensembles only when components add complementary signal.
+  Reinforcement learning is not a V1 requirement.
+- **Selection:** never on total historical return alone. Weigh rank IC,
+  calibration for real probabilities, CAGR, Sharpe/Sortino/Calmar, drawdown,
+  turnover and cost sensitivity, expectancy/profit factor, stability across
+  walk-forward periods, universes and regimes, parameter sensitivity, cost to
+  train/run, and explainability. Prefer the simpler model when performance is comparable.
 
-Research at least:
-
-- 5 trading days;
-- 10 trading days;
-- 20 trading days.
-
-Do not assume all horizons require separate production models until research demonstrates value.
-
-### Candidate targets
-
-Test several formulations:
-
-1. forward raw return;
-2. forward excess return vs market/sector;
-3. cross-sectional forward-return rank;
-4. target-before-stop/barrier outcome within a fixed horizon.
-
-Cross-sectional ranking and excess-return targets are especially aligned with the scanner/product design.
-
-### Feature families
-
-Initial price-derived feature research should include:
-
-**Momentum/returns**
-- 1/5/20/60/120-day returns as appropriate;
-- momentum acceleration;
-- distance from recent highs/lows;
-- relative strength.
-
-**Trend**
-- SMA/EMA relationships;
-- distance from moving averages;
-- trend slopes;
-- breakout measures.
-
-**Volatility/risk**
-- ATR;
-- realized volatility;
-- downside volatility;
-- volatility changes/regimes.
-
-**Volume/liquidity**
-- relative volume;
-- volume trend;
-- dollar volume;
-- turnover/liquidity proxies where available.
-
-**Cross-sectional/context**
-- percentile/rank transformations;
-- market-relative momentum;
-- sector-relative momentum;
-- sector strength;
-- market breadth;
-- market regime.
-
-Later versions may add point-in-time fundamentals, earnings/analyst revisions, and news/event features.
-
-### Model tournament
-
-Do not select the production model based on aesthetics or complexity. Evaluate:
-
-1. rule-based momentum/trend/volatility baseline;
-2. linear/logistic/Ridge/Elastic Net;
-3. LightGBM;
-4. XGBoost;
-5. CatBoost;
-6. MLP;
-7. LSTM/GRU and other temporal neural candidates;
-8. Transformer/TCN-style candidates only if justified;
-9. ensembles when components demonstrate complementary signal.
-
-Qlib can accelerate research and provide reference implementations/benchmarks, but the final production runtime should remain under our control unless a deliberate decision is made otherwise.
-
-Reinforcement learning is not a V1 requirement.
-
-### Selection criteria
-
-Do not choose a model solely on total historical return.
-
-Evaluate:
-
-- rank IC/predictive ranking quality where applicable;
-- calibration for actual probabilistic outputs;
-- CAGR;
-- Sharpe/Sortino/Calmar;
-- maximum drawdown;
-- turnover and transaction-cost sensitivity;
-- expectancy/profit factor;
-- stability across walk-forward periods;
-- stability across universes;
-- regime robustness;
-- parameter sensitivity;
-- training/inference cost;
-- explainability/operability.
-
-A simpler model is preferred when performance is comparable and robustness/interpretability are better.
+Qlib may accelerate research, but the production runtime stays under our
+control unless a deliberate decision is made otherwise.
 
 ## Training and Validation Data
 
-### Data source
-
-Use high-quality historical market data obtained through our own development/research subscription(s). The API/provider is a source of raw observations; training should operate primarily on a locally cached, versioned dataset.
-
-Initial desired history: approximately **10–20 years of clean daily U.S. equity data**, depending on provider coverage and point-in-time quality.
-
-Required/desired raw fields and metadata:
-
-- daily OHLCV;
-- adjusted/unadjusted price information;
-- splits;
-- dividends;
-- ticker changes;
-- listing/delisting information when available;
-- point-in-time universe membership;
-- benchmark/index/ETF data;
-- sector/industry metadata when reliable.
-
-### Training workflow
+Use high-quality data from our own development/research subscriptions and train
+on a locally cached, versioned dataset; the provider API is only a source of raw
+observations. Desired history is roughly **10–20 years of clean daily U.S.
+equity data**, depending on provider coverage and point-in-time quality, with
+OHLCV, adjusted/unadjusted prices, splits, dividends, ticker changes,
+listings/delistings, point-in-time membership, benchmark/ETF data and reliable
+sector metadata where available.
 
 ```text
-Provider download(s)
-       ↓
-Immutable raw store
-       ↓
-Normalization / quality checks
-       ↓
-Point-in-time research dataset
-       ↓
-Feature generation
-       ↓
-Chronological training/validation
-       ↓
-Walk-forward predictions
-       ↓
-Portfolio backtest
-       ↓
-Robustness / stress tests
-       ↓
-Production model candidate
+Provider download → immutable raw store → normalization/quality checks → point-in-time dataset → features
+  → chronological training/validation → walk-forward predictions → portfolio backtest → stress tests → candidate
 ```
 
-### Leakage controls
-
-Never randomly shuffle the entire time series into train/test sets.
-
-Use chronological partitions and walk-forward evaluation. During each historical prediction, only data available at that timestamp may contribute to:
-
-- features;
-- universe membership;
-- normalization/scaling;
-- model training;
-- parameter selection;
-- fundamentals/events when those are later introduced.
-
-Keep a genuinely untouched final test period during research.
-
-### Independent data verification
-
-Prefer validating final strategy/model behavior against a second provider/dataset before commercial release. Provider-to-provider results need not be numerically identical, but large discrepancies must be investigated.
+Never randomly shuffle the time series. At each historical prediction only data
+available at that timestamp may feed features, universe membership,
+normalization, training, parameter selection, and fundamentals/events when
+introduced. Keep a genuinely untouched final test period during research.
 
 ## Cost-Conscious Research Data Workflow
 
-During initial development, use legally permitted **free/free-tier historical data** to build the engine, feature pipeline, strategies, ML training workflow, automated tests, and exploratory backtests. Do not present free-dataset results as validated or independently verified; built-in evidence packs state the provider and its limitations.
+Legally permitted free/free-tier data may be used to build the engine,
+features, strategies, ML workflow, tests and exploratory backtests, and to
+research V1 ETF built-ins. Its results are never presented as validated or
+independently verified; evidence packs state the provider and its limitations.
 
-For built-in strategies, [the evidence standard](docs/STRATEGY_EVIDENCE.md) governs: V1 ETF built-ins are built and researched on Alpaca daily data, rules come from published sources and are registered before the run, and before reference numbers are published the project owner decides whether an independent-provider cross-check is feasible; the evidence pack records the decision, its reason and any result. A material performance difference across providers is a data-quality finding to investigate and disclose, not something to hide.
+Before reference numbers for a built-in are published, the project owner
+decides whether an independent-provider cross-check is feasible; the evidence
+pack records the decision, its reason and any result
+([the evidence standard](docs/STRATEGY_EVIDENCE.md), Section 5). Another vendor
+over the same dates is a data cross-check, not a new temporal holdout; a
+material difference is a data-quality finding to investigate and disclose.
 
-For ML models, once a candidate is promising, freeze its methodology/configuration, obtain higher-quality data and re-run the important experiments from scratch before shipping or reference claims. Future stock-based built-ins follow [the evidence standard](docs/STRATEGY_EVIDENCE.md) on survivorship-free point-in-time data. Customer-facing use remains BYO-provider/local-data oriented; we do not redistribute provider datasets unless licensing explicitly permits it.
+The V1 ML model is trained on Tiingo data from our own key. Its ETF universe,
+features and methodology are frozen and registered before training, and it
+follows the same cross-check decision as the rule plans. Never redistribute
+provider datasets unless licensing explicitly permits it.
 
 ## Data Provider Strategy
 
-The application must abstract market-data providers behind a normalized interface.
+All market data passes through a provider-neutral, normalized interface. Do not
+hard-code commercial assumptions about a vendor; pricing, entitlements,
+coverage and licensing change.
 
-### Internal research candidate
+**V1 tester release (decided 2026-10-11):** Tiingo is the only customer-facing
+provider, used with the user's own free-tier key and cached locally. Tiingo's
+developer documentation states that software where users bring their own token
+and no data is distributed needs no licence. Alpaca daily data remains internal
+development and research data; confirming Alpaca's terms for commercial
+research use is an open action item.
 
-Point-in-time index membership, delisted securities, and survivorship-aware
-historical testing remain priorities for internal research. Norgate was the
-initial candidate, but its current public FAQ excludes business/commercial use;
-that route is paused pending an applicable agreement. The 2026-10-03
-[provider review](docs/INDEPENDENT_DATA_RETEST.md) proposes a conditional EODHD
-pilot and Massive alternative for the frozen fixed-panel retest. Neither is
-qualified for historical universes or this project's account by documentation
-alone. Quality, coverage, licensing, and cost review remain required.
+After the tester release:
 
-### Customer-facing Provider #1
+- **EODHD** — candidate adapter (EOD prices, corporate actions, bulk access,
+  historical index components at a customer-accessible price). Verify before
+  locking: S&P 500/Nasdaq-100 coverage and history, Russell 1000
+  availability/licensing, delistings and ticker changes, adjustment semantics,
+  commercial/BYO-key terms, throughput.
+- **Local CSV/Parquet import** — required in commercial V1, so users with
+  existing data are not locked to one vendor.
+- **Alpaca** for a later paper/live brokerage roadmap; **Massive/Polygon** if
+  richer real-time/intraday data is needed.
+- **Survivorship-aware point-in-time data** for later stock research. Norgate's
+  public FAQ excludes business/commercial use, so it is paused pending an
+  applicable agreement; EODHD and Massive are unqualified alternatives.
+  Quality, coverage, licensing and cost review remain required.
 
-**EODHD** is the leading first adapter candidate because it combines historical EOD data, corporate actions, bulk access, and historical index-component functionality at a customer-accessible price point.
-
-Must verify before locking:
-
-- exact S&P 500 coverage/history;
-- exact Nasdaq-100 coverage/history;
-- Russell 1000 availability/licensing;
-- delisted securities/ticker-change behavior;
-- adjustment semantics;
-- commercial/BYO-key terms;
-- API throughput/reliability.
-
-### Customer-facing Provider #2
-
-**Tiingo** is a strong second adapter candidate for high-quality EOD price/corporate-action data. Confirm entitlement and customer-use terms before launch.
-
-### Future adapters
-
-- **Alpaca** — strategically useful for a later paper/live brokerage roadmap.
-- **Massive/Polygon** — potentially useful if future versions require richer real-time/intraday data.
-
-### Local data
-
-CSV/Parquet import is required in V1 so users with existing data can use the platform and the product is not locked to one vendor.
-
-### Customer API requirements
-
-Normal V1 usage should require **at most one market-data API account/key** for current data and provider-backed historical backtests.
-
-The customer should not need:
-
-- OpenAI/Anthropic API;
-- hosted ML inference;
-- GPU cloud services;
-- brokerage credentials;
-- news API;
-- fundamentals API;
-
-for the core V1 product.
-
-Official trained models run locally.
+Normal V1 use requires **at most one market-data API key**. The core product
+needs no OpenAI/Anthropic API, hosted inference, GPU cloud, brokerage
+credentials, news or fundamentals API. Official trained models run locally.
 
 ## Bundled Benchmark Dataset
 
-We may include a benchmark/reference dataset if redistribution/licensing permits it.
-
-Purpose:
-
-- allow immediate product demonstration/reproduction;
-- provide known regression fixtures/reference results;
-- let users explore the application before configuring an external provider.
-
-The customer must also be able to rerun supported strategies using their own provider/local data to independently verify behavior.
-
-Never bundle third-party data without confirmed redistribution rights.
+A reference dataset may ship only with confirmed redistribution rights, for
+immediate demonstration, regression fixtures and exploration before a provider
+is configured. Customers must still be able to rerun supported strategies on
+their own provider/local data.
 
 ## Backtest Provenance
 
-Every saved run/report should include a provenance manifest similar to:
-
-```text
-Application version
-Strategy name/version
-Model name/version/hash
-Strategy/config hash
-Risk/sizing configuration
-Data provider
-Data retrieval timestamp
-Dataset version/hash where practical
-Universe
-Point-in-time membership policy
-Backtest period
-Adjustment policy
-Signal timing
-Execution timing
-Slippage
-Commission/fees
-Benchmark
-Engine version/hash
-```
-
-This is a product feature, not merely debugging metadata.
+Every saved run/report carries a manifest: application version; strategy
+name/version; model name/version/hash; strategy/config hash; risk/sizing
+configuration; data provider; retrieval timestamp; dataset version/hash where
+practical; universe and point-in-time policy; period; adjustment policy; signal
+and execution timing; slippage; commission/fees; benchmark; engine
+version/hash. This is a product feature, not debugging metadata. See
+[reproducibility](docs/REPRODUCIBILITY.md).
 
 ## Reference Strategies
 
-V1 must ship **3–4 distinct, well-researched built-in strategies** (minimum
-three; target four), ready to configure, scan, backtest, validate and inspect
-through Desktop with explainable risk/sizing defaults. The qualification and
-delivery contract is [the built-in strategy evidence standard](docs/STRATEGY_EVIDENCE.md),
-adopted 2026-10-08. In summary, a built-in qualifies when it has:
+V1 must ship **at least three distinct rule-based built-ins (target four) plus
+the ML-ranked rotation**, ready to configure, scan, backtest, validate and inspect
+with explainable risk/sizing defaults. [The evidence standard](docs/STRATEGY_EVIDENCE.md),
+adopted 2026-10-08, is the qualification and delivery contract and governs
+wherever this document disagrees. A built-in needs an economic rationale with
+two independent published sources; fixed rules registered before the run, each
+parameter from a named publication; a verified implementation (hand-calculated
+and no-look-ahead tests, byte-for-byte reproduction); a complete evidence pack
+(three cost levels, bootstrap uncertainty, deflated Sharpe ratio with the
+disclosed trial count, period/drawdown breakdowns, sensitivity, primary, SPY,
+60/40 and equal-weight references, T-bill cash yield, forward signal journal,
+reproduction command); one of the V1 roles in the standard, not shared; and a
+plain-language limitations page.
 
-- an economic rationale with at least two independent published sources;
-- fixed rules declared in a committed registration before the run, each
-  parameter sourced from a named publication (any deviation documented with a
-  reason not based on inspected performance) and related ledger rows cited;
-- a verified implementation (hand-calculated tests, no-look-ahead test,
-  byte-for-byte reproduction);
-- a complete evidence pack: net-of-cost results at three cost levels,
-  bootstrap uncertainty and a deflated Sharpe ratio using the disclosed trial
-  count, period and drawdown breakdowns, sensitivity tables, a registered
-  primary reference plus SPY, 60/40 and equal-weight references, T-bill cash
-  yield, a forward signal journal and a reproduction command;
-- one of the standard's four V1 roles, not shared with another built-in, with
-  return correlation and holdings overlap against earlier built-ins reported;
-- a plain-language limitations page.
-
-There is no return, Sharpe or benchmark-beating threshold. Honest evidence that
-a strategy underperformed in some regime is a deliverable, not a failure.
-
-V1 built-ins are ETF-based and literature-backed; the candidates are
-multi-asset time-series trend, dual momentum, US sector rotation and defensive
-inverse-volatility allocation. Survivor-selected stock panels are never
-evidence for a built-in; stock-based strategies need survivorship-free
-point-in-time data and remain research candidates until then. Every study,
-including failures, is recorded in [the research ledger](docs/RESEARCH_LEDGER.md).
-Do not fill the quota with parameter variants, change a registered
-configuration after seeing results, or relabel inspected history as untouched.
-Where this document disagrees with the standard on built-in strategies, the
-standard governs.
+There is **no return, Sharpe or benchmark-beating threshold**: honest evidence
+that a strategy underperformed in some regime is a deliverable. V1 built-ins
+are ETF-based (see **V1 Tester Release**). Survivor-selected stock panels are
+never evidence for a built-in; stock strategies need survivorship-free
+point-in-time data. Every study, including failures, is recorded in
+[the research ledger](docs/RESEARCH_LEDGER.md). Do not fill the quota with
+parameter variants, change a registered configuration after seeing results, or
+relabel inspected history as untouched.
 
 ## Production Models
 
-Official production models are trained by us and packaged with the application.
-
-Normal customer workflow is inference only:
-
-```text
-Latest market data
-      ↓
-Production feature pipeline
-      ↓
-Packaged production model
-      ↓
-Scores/ranks
-      ↓
-Strategy rules
-      ↓
-Risk + sizing
-```
-
-The model-training pipeline is required in V1 Developer/Source Edition.
-An integrated Desktop retraining UI is optional advanced scope; ordinary
-Desktop use must not require training a model. A richer retraining UI may be
-deferred without deferring the Developer/Source training pipeline.
-
-If included, custom models must be clearly separated from official production models and automatically evaluated before being promoted/used.
+Official production models are trained by us, packaged with the application
+and used for inference only: latest data → production features → packaged
+model → scores/ranks → strategy rules → risk and sizing. The training pipeline
+is required in V1 Developer/Source; a Desktop retraining UI is optional and may
+be deferred without deferring that pipeline. Ordinary Desktop use never
+requires training. Custom models, if supported, stay separate from official
+ones and are evaluated automatically before use.
 
 ## UI Direction
 
-Preferred architecture to evaluate:
+**Trader/Analyst rule:** every screen is simple by default (Trader view: plain
+language, money, worst falls) with full detail on demand (Analyst view:
+statistics, settings, manifests).
 
-- React + TypeScript frontend;
-- lightweight cross-platform desktop shell such as Tauri;
-- local Python quant engine;
-- local DuckDB/Parquet storage;
-- explicit IPC/API boundary between UI and engine.
+The tester release is a local web app: a Python server on the user's machine,
+the browser as UI, and an explicit API boundary to the engine. For the
+commercial desktop shell, React + TypeScript in a lightweight shell such as
+Tauri, with the local Python engine and local DuckDB/Parquet storage, remains
+the direction to validate with a packaging spike before large UI investment.
 
-The choice should be validated with a packaging spike before large UI investment.
-
-### Primary screens
-
-**Dashboard**
-- data freshness/health;
-- saved/recent runs;
-- portfolio/research summary as appropriate;
-- quick actions.
-
-**Scanner**
-- universe selection;
-- strategy/model selection;
-- ranked candidates;
-- filters and explanations.
-
-**Strategy / Model**
-- strategy configuration;
-- entry/exit rules;
-- model/horizon selection;
-- advanced model metadata.
-
-**Backtest**
-- period;
-- universe;
-- capital;
-- execution assumptions;
-- costs/slippage;
-- risk/sizing;
-- benchmark;
-- run/save.
-
-**Results**
-- equity/drawdown;
-- metrics;
-- benchmark comparison;
-- monthly/annual results;
-- exposure/turnover.
-
-**Validation**
-- OOS/walk-forward;
-- sensitivity;
-- stress tests;
-- regime/period analysis.
-
-**Trade Explorer**
-- complete trade ledger;
-- drill-down into each decision.
-
-**Data Sources**
-- provider credentials;
-- local imports;
-- cache/storage;
-- health/coverage/provenance.
-
-**Settings / Saved Research**
-- saved configurations/runs;
-- export;
-- application/system settings.
+Primary screens follow the product areas: Dashboard (data health, recent runs,
+quick actions), Scanner, Strategy/Model, Backtest, Results, Validation, Trade
+Explorer, Data Sources, and Settings/Saved Research.
 
 ## Platform and Packaging
 
-### V1
+- **V1:** Windows 10/11 x64 is primary and fully tested; Linux x86-64 is
+  supported. The tester release ships a Windows build first, built by GitHub Actions.
+- **Deferred:** macOS; a hosted cloud/browser SaaS edition; mobile.
 
-- Windows 10/11 x64: primary, fully tested release.
-- Linux x86-64: supported release.
-
-### Deferred
-
-- macOS;
-- cloud/browser SaaS edition;
-- mobile.
-
-Installation must not require users to install Python or manually manage environments.
-
-Potential packaging targets:
-
-- signed Windows installer when commercially ready;
-- appropriate Linux packaged application/AppImage or equivalent.
-
-The Python engine and model dependencies must be bundled reproducibly.
+Users never install Python or manage environments. Targets: a signed Windows
+installer when commercially ready and a packaged Linux application (AppImage or
+equivalent), with the engine and model dependencies bundled reproducibly.
 
 ## Security / Secrets
 
-- Store API credentials using OS-appropriate secure storage where practical.
+- Store API credentials in OS-appropriate secure storage where practical.
 - Never write API keys into logs, reports, exported configs, telemetry, or provenance manifests.
-- Core product should not require sending portfolio/research data to our servers.
-- Avoid unnecessary telemetry in V1; if introduced later, make it explicit and privacy-conscious.
+- The core product never requires sending portfolio/research data to our servers.
+- Avoid unnecessary telemetry; if introduced later, make it explicit and privacy-conscious.
 
 ## Reliability and Error Handling
 
-Commercial V1 must handle gracefully:
-
-- invalid/expired API key;
-- provider rate limit/outage;
-- missing symbol/history;
-- incomplete universe membership;
-- malformed local files;
-- stale cache;
-- incompatible model/feature schema;
-- corrupted saved run/config;
-- insufficient history for an indicator/model;
-- insufficient cash/risk capacity for a simulated order.
-
-Users should receive actionable errors, not raw stack traces.
+Handle gracefully: invalid/expired keys, provider rate limits/outages, missing
+symbols/history, incomplete membership, malformed files, stale cache,
+incompatible model/feature schema, corrupted saved runs, insufficient history,
+and insufficient cash/risk capacity. Users get actionable errors, not stack traces.
 
 ## Testing / Quality Bar
 
-Required before sale:
-
-- unit coverage for critical financial math;
-- hand-verifiable synthetic backtests;
-- no-look-ahead/leakage tests;
-- provider normalization integration tests;
-- corporate-action tests;
-- deterministic regression/golden tests;
-- cross-platform numerical consistency checks;
-- model/schema compatibility tests;
-- realistic end-to-end backtest tests;
-- independent data-provider comparison on selected reference runs where the project owner has decided it is feasible (built-ins: [the evidence standard](docs/STRATEGY_EVIDENCE.md), Section 5);
-- installer/update/uninstall smoke tests on supported OSes.
-
-Any material discrepancy in financial results is a release blocker until understood.
+Required before sale: unit coverage of critical financial math; hand-verifiable
+synthetic backtests; no-look-ahead/leakage tests; provider normalization and
+corporate-action tests; deterministic regression/golden tests; cross-platform
+numerical consistency; model/schema compatibility; realistic end-to-end
+backtests; independent-provider comparison on selected reference runs where the
+project owner has decided it is feasible; installer/update/uninstall smoke tests
+on supported OSes. Any material discrepancy in financial results blocks release
+until understood.
 
 ## V1 Non-Goals
 
-Do not allow these to expand V1 unless the project plan is explicitly changed:
-
-- guaranteed-return or “winning stock” prediction;
-- live automated trading;
-- broker order execution;
-- options;
-- futures;
-- forex;
-- crypto;
-- intraday/tick backtesting;
-- social-media sentiment;
-- mandatory news intelligence;
-- LLM stock prediction;
-- reinforcement-learning production strategy;
-- cloud accounts/SaaS backend;
-- mobile application;
-- macOS support;
-- elaborate DRM;
-- source-code delivery in the standard product.
+Unless the plan is explicitly changed: guaranteed-return or “winning stock”
+prediction; live automated trading; broker order execution; options, futures,
+forex or crypto; intraday/tick backtesting; social-media sentiment; mandatory
+news intelligence; LLM stock prediction; reinforcement-learning production
+strategies; cloud accounts/SaaS backend; mobile; macOS; elaborate DRM;
+source code in the standard product.
 
 ## Likely Post-V1 Roadmap
 
-Potential later additions, prioritized by demonstrated customer demand and research value:
-
-- point-in-time fundamentals and multi-factor models;
-- earnings/analyst revision data;
-- news/event classification and optional LLM-assisted text structuring;
-- expanded customer-facing model-training/retraining UX if not included in the initial Developer Edition;
-- additional model ensembles;
-- paper trading;
-- broker integrations such as Alpaca/IBKR;
-- richer real-time/intraday data;
-- additional universes/markets;
-- macOS;
-- optional Docker/self-hosted deployment for advanced users.
+By demonstrated demand and research value: point-in-time fundamentals and
+multi-factor models; earnings/analyst revisions; news/event classification with
+optional LLM-assisted text structuring; richer retraining UX; model ensembles;
+paper trading; broker integrations such as Alpaca/IBKR; real-time/intraday data;
+more universes/markets; macOS; optional Docker/self-hosted deployment.
 
 ## Initial Development Sequence
 
 The agreed build roadmap is **1. Market-data layer → 2. Backtester → 3. Risk/money management → 4. Strategies → 5. Validate strategies → 6. ML models → 7. Scanner/analytics → 8. Desktop UI → 9. Packaging/licensing/website**.
 
-Each stage must have a usable, tested foundation before the next depends on it. Tests, provenance, documentation, and error handling accompany the implementation throughout. This sequence does not defer financial accounting tests to Stage 5 or all numerical reporting to Stage 7. Small fixtures and scripted orders are engineering inputs, not selected production strategies.
+Each stage needs a usable, tested foundation before the next depends on it.
+Tests, provenance, documentation and error handling accompany every stage;
+accounting tests are not deferred to Stage 5, nor numerical reporting to Stage
+7. Small fixtures and scripted orders are engineering inputs, not production
+strategies. Status and the tester-release build order are in
+[the roadmap](docs/ROADMAP.md).
 
-### Stage 1 — Market-data layer
-
-- provider-neutral raw-price, security-identity, calendar, and corporate-action contracts;
-- immutable raw/normalized snapshots, local storage, source hashes, and retrieval metadata;
-- local CSV/Parquet imports and the initial development-provider adapter;
-- data-health checks and explicit limits on calendar, adjustments, delistings, and universe coverage;
-- point-in-time universe and benchmark data interfaces, with qualified scope or disclosed restrictions.
-
-Current implementation includes local CSV/JSON and optional Parquet snapshots, EODHD original-response/API access, snapshot integrity, and dated membership connected to strategy eligibility. Synthetic integration tests cover those boundaries. Provider qualification, actual historical membership evidence, DuckDB/query storage and larger-data performance remain additional Stage 1 work. See [the data-layer contract](docs/DATA_LAYER.md).
-
-Version 0.5.1 adds [offline corporate-action auditing and frozen-data preflight](docs/DATA_QUALIFICATION.md).
-It preserves raw historical cash/payment fields, requires reviewed share-split
-classification, and reports all input/evidence blockers without executing a
-strategy. It does not complete provider qualification. The frozen-retest gate
-it was built for no longer governs built-ins; see [the evidence standard](docs/STRATEGY_EVIDENCE.md).
-
-The tested local contract supports synthetic backtester development and a private, explicitly unqualified fixed-ETF market diagnostic requested on 2026-10-03. Complete actual-provider qualification before the registered empirical campaign or production claims; neither synthetic fixtures nor exploratory downloads establish qualified market coverage. For built-ins, [the evidence standard](docs/STRATEGY_EVIDENCE.md), Section 5, governs data use and disclosure. The research-only collector and issuer normalization are documented in [the research plan](docs/RESEARCH_PLAN.md#first-real-market-exploratory-run); they are not a production API adapter.
-
-### Stage 2 — Backtester
-
-- specify signal and next-session execution timing;
-- evaluate reuse against the hand-calculated conformance fixtures;
-- implement shared-cash portfolio accounting, concurrent positions, costs, and rejected orders;
-- handle supported corporate actions, missing data, and end-of-test positions explicitly;
-- retain orders, fills, cash movements, positions, and reproducibility manifests;
-- verify the simulator with synthetic ledgers and causality tests before using returns for research.
-
-The simulator necessarily includes basic cash/position accounting and order affordability. Configurable investment-risk controls and sizing methods belong to Stage 3.
-
-Current implementation: a reference long-only next-session market-order engine with shared cash, explicit costs, split/dividend/receivable/cash-delisting accounting, audit bundles, and hand-calculated/causality tests. Stage 3 adds protective stop-market execution with adverse gap handling. See [the implemented contract](docs/BACKTESTER.md). Target/trailing and broader execution profiles, production reuse selection, and Windows checks remain pending before Stage 2/commercial release completion. The initial engine does not imply those gates have passed.
-
-### Stage 3 — Risk/money management
-
-- fixed allocation, fixed-fractional risk, and ATR/volatility-based sizing;
-- position, exposure, concentration, liquidity, reserve, and drawdown controls;
-- portfolio-aware decisions and recorded rejection reasons;
-- verified interaction between sizing, cash, stops, and execution.
-
-Current implementation: fixed allocation, fixed-fractional/ATR stop-risk sizing, shared-cash reservations, entry position/exposure/group/reserve/liquidity/heat limits, next-open rechecks, daily drift audits, and close-observed drawdown reduction/latched next-open liquidation. See [the sourced research and implementation contract](docs/RISK_MANAGEMENT.md). Defaults are engineering examples, not optimized recommendations; stop/drawdown budgets are not maximum-loss guarantees. Historical group/ETF look-through qualification, richer exit-capacity modeling and real-data/Windows validation remain release work.
-
-### Stage 4 — Strategies
-
-- deterministic features and rule-based reference approaches;
-- explicit ranking, entry/exit, and rebalancing contracts;
-- registered configurations and benchmarks;
-- common interfaces for subsequent ML scores and scanner use.
-
-Current implementation: six rule-based families, including the original ten proposed recipes, a separately registered stock low-volatility family and the separately registered unusual dollar-volume ranking, full-budget/reserve buy-and-hold, same-universe equal-weight and cash references, causal split/dividend signal features, deterministic ranking, scheduled rebalancing and an explicit ATR-protected risk variant. Full configurations and signal decisions are versioned/audited; schema-1/2 saved runs remain readable. See [the strategy contract](docs/STRATEGIES.md). Synthetic correctness checks, one private ten-year momentum diagnostic, and an untuned exploratory comparison of all ten recipes have run. The comparison retains 70 trials and establishes no reliable benchmark superiority or production nominee; see [its evidence](docs/RESEARCH_PLAN.md#all-predefined-strategy-comparison). Built-ins are selected, and reference numbers published, only under [the evidence standard](docs/STRATEGY_EVIDENCE.md).
-
-### Stage 5 — Validate strategies
-
-- registrations, study tags and the research ledger for every study, including failures ([the evidence standard](docs/STRATEGY_EVIDENCE.md));
-- complete evidence packs for built-ins (cost ladder, bootstrap uncertainty, deflated Sharpe ratio, period/drawdown breakdowns, sensitivity, references);
-- walk-forward, parameter/cost sensitivity, regime breakdowns and benchmark comparisons as product validation tools;
-- forward signal journals for shipped built-ins.
-
-Current implementation: frozen finite rule-strategy campaigns, snapshot-bound capability evidence, chronological continuous development folds and separate selection portfolios, append-only trial/failure records, matched benchmark/cost/delay/participation comparisons, exact metrics and asset-P&L reconciliation, paired stationary bootstrap and a centered maximum-mean search diagnostic, predefined nomination criteria and a single frozen nominee, independent-data crosschecks, and consumed-once final evaluation. JSON/CSV reports and accounting bundles are integrity-checked. See [the validation contract](docs/VALIDATION.md). Only synthetic engineering campaigns have been run; actual-provider qualification and empirical strategy validation remain required. DSR/PBO, qualified historical stock universes, measured execution/cash-rate assumptions, ML refitting and full commercial validation remain separate work. Built-in qualification follows [the evidence standard](docs/STRATEGY_EVIDENCE.md) rather than this campaign's nomination gates.
-
-The separate private [robustness audit](docs/RESEARCH_PLAN.md#robustness-audit-results--2026-10-03) has also run on already exposed history: 30 registered parameter/control/cost trials and five reused original portfolios. It implements reconciled asset/holding attribution, rolling returns, recovery, lagged historical-cash and exposure diagnostics with independently checked stop fills and verified report exports. Both fixed parents pass the limited positive-CAGR neighbor rule but fail their predeclared objectives; no production nominee is created. The audit and all-ten comparison remain exploratory evidence outside the qualified campaign and preserve the original search history.
-
-Before publishing reference numbers, the project owner decides whether to
-cross-check a built-in on an independent provider and records the decision and
-reason in its evidence pack. Another vendor over
-the same dates is a data cross-check, not a new temporal holdout. All inspected
-history is listed in [the research ledger](docs/RESEARCH_LEDGER.md); forward
-journals and future sessions supply fresh evidence.
-
-The separate [stock campaign](docs/RESEARCH_PLAN.md#stock-campaign-results--2026-10-03)
-now implements the five-step research workflow on an explicitly surviving
-22-stock sample. All 99 portfolios pass ledger reconstruction; the then-current
-304-test suite passed.
-SMA200 trend met its predeclared defensive screens under the superseded
-contract; the three other canonical parents failed their objectives. Under
-[the evidence standard](docs/STRATEGY_EVIDENCE.md) a survivor-selected stock panel cannot
-support a built-in, so SMA200 remains a research candidate with a
-[forward journal](docs/FORWARD_SHADOW.md). Unknown dividend payment dates and
-provider/sample qualification gaps remain visible.
-There are zero qualified built-in strategies; the minimum-three/target-four
-release requirement remains outstanding. Original registrations and a reported
-finalization repair are preserved without financial resimulation or retuning.
-
-The authorized fundamental feasibility and SEC evidence studies remain research-only and unqualified. Dated findings are consolidated in [research status](docs/RESEARCH_STATUS.md), preserving links to their detailed registrations and original evidence. Further bulk collection is deferred while correctness and data integration take priority; purchasing data is conditional on verified coverage and usage requirements.
-
-The [audit remediation](docs/AUDIT_REMEDIATION.md) adds financial edge-case fixes, portable source preservation, EODHD response/API access, optional Parquet snapshots and dated membership integrated into strategy eligibility. These are engineering foundations, not qualified historical data, new strategy returns or release completion.
-
-### Stage 6 — ML models
-
-- leakage-safe feature/label, training, and chronological prediction pipelines;
-- linear baselines, bounded tree-model experiments, and neural candidates only when justified;
-- compare every model through the verified simulator and Stage 5 validation process;
-- select production artifacts only from documented out-of-sample evidence.
-
-### Stage 7 — Scanner/analytics
-
-- scanner using the same strategy/model/risk definitions as historical research;
-- full analytics, benchmarks, Trade Explorer, validation reports, and exports;
-- local saved research and explanations derived from recorded decisions.
-
-### Stage 8 — Desktop UI
-
-- Windows/Linux desktop shell and local Python-engine integration;
-- data-source setup, scanner, configuration, backtest, validation, and saved-research workflows;
-- progressive disclosure of advanced settings with visible financial assumptions;
-- observed usability, packaging feasibility, and failure-state checks.
-
-### Stage 9 — Packaging/licensing/website
-
-- reproducible Windows/Linux installers and smoke tests;
-- Evaluation, Desktop, and Developer/Source delivery, including the training pipeline;
-- secure credential storage, licensing/EULA, permitted reference artifacts, and release documentation;
-- website, purchase/download flow, private release distribution, and entitlement boundaries;
-- final commercial release-gate validation with first customer/design partner.
+1. **Market-data layer** — provider-neutral price, identity, calendar and
+   corporate-action contracts; immutable raw/normalized snapshots with hashes
+   and retrieval metadata; local imports and provider adapters; data-health
+   checks with explicit limits; point-in-time universe and benchmark
+   interfaces. Contracts: [data layer](docs/DATA_LAYER.md),
+   [data integration](docs/DATA_INTEGRATION.md), [universes](docs/UNIVERSES.md).
+2. **Backtester** — signal vs next-session execution timing; reuse of existing
+   engines evaluated against hand-calculated conformance fixtures; shared-cash
+   accounting, concurrent positions, costs and rejected orders; explicit
+   corporate actions, missing data and end-of-test positions; retained orders,
+   fills, cash movements and manifests; verified by synthetic ledgers and
+   causality tests before research use. Basic cash accounting and order
+   affordability live here; investment-risk controls and sizing are Stage 3.
+   Contract: [backtester](docs/BACKTESTER.md).
+3. **Risk/money management** — fixed allocation, fixed-fractional and
+   ATR/volatility sizing; position, exposure, concentration, liquidity, reserve
+   and drawdown controls; recorded rejection reasons; verified interaction of
+   sizing, cash, stops and execution. Contract: [risk management](docs/RISK_MANAGEMENT.md).
+4. **Strategies** — deterministic features and rule-based approaches; explicit
+   ranking, entry/exit and rebalancing contracts; registered configurations and
+   benchmarks; common interfaces for ML scores and the scanner.
+   Contract: [strategies](docs/STRATEGIES.md).
+5. **Validate strategies** — registrations, study tags and the research ledger
+   for every study; complete evidence packs for built-ins; walk-forward,
+   sensitivity, regime and benchmark tools for users; forward signal journals
+   ([example](docs/FORWARD_SHADOW.md)). Contract: [validation](docs/VALIDATION.md).
+6. **ML models** — leakage-safe feature/label, training and chronological
+   prediction pipelines; linear baselines, bounded tree models, neural
+   candidates only when justified; every model compared through the verified
+   simulator and Stage 5; production artifacts chosen only from documented OOS evidence.
+7. **Scanner/analytics** — scanner on the same strategy/model/risk definitions
+   as research; full analytics, benchmarks, Trade Explorer, validation reports
+   and exports; saved research and explanations from recorded decisions.
+8. **Desktop UI** — application shell (a local web app for the tester release)
+   with local engine integration; setup, scanner, configuration, backtest,
+   validation and saved-research workflows; progressive disclosure with visible
+   assumptions; observed usability, packaging and failure-state checks.
+9. **Packaging/licensing/website** — reproducible Windows/Linux installers and
+   smoke tests; Evaluation, Desktop and Developer/Source delivery with the
+   training pipeline; secure credentials, licensing/EULA, permitted reference
+   artifacts and release docs; website, purchase/download flow, private
+   distribution and entitlements; final release-gate validation with the first
+   customer/design partner.
 
 ## Release Gate for Commercial V1
 
 V1 is ready to sell only when:
 
 1. supported data sources work reliably and licensing is understood;
-2. at least three distinct built-in strategies (target four) meet [the built-in strategy evidence standard](docs/STRATEGY_EVIDENCE.md), each with its complete evidence pack and limitations page; supplied models meet the ML evidence requirements of PR-10 and Stage 6 (leakage-safe chronological fitting, baseline comparisons and documented out-of-sample evidence);
+2. at least three distinct built-in strategies (target four) meet [the evidence standard](docs/STRATEGY_EVIDENCE.md), each with its complete evidence pack and limitations page, and supplied models meet PR-10 and Stage 6 (leakage-safe chronological fitting, baseline comparisons, documented out-of-sample evidence);
 3. backtesting semantics are explicit and covered by tests;
 4. risk/sizing/portfolio accounting are verified;
 5. results are reproducible and provenance is recorded;
@@ -1322,45 +750,6 @@ V1 is ready to sell only when:
 8. no mandatory developer tooling is required by the customer;
 9. failures produce useful errors rather than crashes/stack traces;
 10. documentation explains setup, data assumptions, strategy/model behavior, backtesting assumptions, metrics, and limitations;
-11. each built-in's evidence pack records the project owner's independent-provider cross-check decision, its reason and any result ([the evidence standard](docs/STRATEGY_EVIDENCE.md), Section 5); supplied models have been checked against an independent data source where feasible;
+11. each built-in's evidence pack records the project owner's independent-provider cross-check decision, its reason and any result; supplied models have been checked against an independent data source where feasible;
 12. the product is something we would deliver unchanged at its core to customer #2 rather than rebuild after customer #1;
 13. PR-01 through PR-15 have acceptance evidence for the declared supported scope, including observed no-code strategy creation and the discover/test/validate/risk workflow; requirements are not marked complete solely because engine tests pass.
-
-## Decision Log — Current Settled Direction
-
-- Build in the nine-stage roadmap above, starting with the market-data layer before the backtester.
-- The 2026-10-03 product positioning and PR-01–PR-15 acceptance contract guide every substantial feature and release claim.
-- V1 requires 3–4 distinct, well-researched built-in strategies (minimum three; target four) under the 2026-10-08 disclosed-evidence standard; the research platform and custom builder do not replace this requirement. V1 built-ins are ETF-based.
-- Product is a paid local desktop quant research system, not SaaS.
-- One-time purchase/perpetual use of delivered release is the intended commercial model.
-- Windows is primary; Linux is supported; macOS later.
-- U.S. equities + major ETFs, daily frequency.
-- S&P 500 + Nasdaq-100 + Russell 1000 + ETFs + custom universes.
-- Point-in-time universe handling is important for credible historical testing.
-- Core application does not require AI/LLM services.
-- ML is an alpha/ranking research component, not a replacement for deterministic risk management.
-- Official models are trained by us and run locally for customers.
-- Simple/rule-based models remain first-class and may outperform more complex ML.
-- Historical data is cached/versioned locally for training/backtesting.
-- Use chronological/walk-forward validation, never naive shuffled temporal splits.
-- EODHD is the leading first customer-facing API candidate; Tiingo is a likely second adapter.
-- Survivorship-aware point-in-time data remains a priority for later stock research; Norgate's public commercial-use limitation pauses that option pending an applicable agreement. EODHD/Massive fixed-panel pilots remain unqualified.
-- Local CSV/Parquet import is required.
-- Prefer independent provider verification before shipping.
-- Use free/free-tier market data (currently Alpaca daily data) for development and built-in strategy research where permitted. Before reference numbers are published, the project owner decides whether an independent-provider cross-check is feasible and the evidence pack records the decision, its reason and any result. Survivorship-free point-in-time data is a later requirement for stock-based strategies, not for V1 ETF built-ins.
-- Data-provider abstraction is mandatory.
-- React/TypeScript + Tauri-like shell + local Python engine is the preferred UI architecture to validate.
-- DuckDB + Parquet is the preferred local analytical storage direction.
-- V1 ships three commercial forms: Evaluation, Desktop, and Developer/Source. Developer/Source is a real V1 deliverable and includes the model-training pipeline.
-- No source code in standard Desktop delivery; Developer/Source Edition is a separate product/license.
-- Current pricing hypotheses: Desktop $599 normal / $399 Early Bird; Developer/Source $2,499 normal / $1,499 Early Bird. Early Bird pricing uses one shared pool of the first 50 unique paying customers across Desktop and Developer/Source; the UI shows both normal and current prices plus a live claimed counter. Validate pricing with real buyers rather than treating it as immutable.
-- OEM/commercial redistribution is negotiated separately rather than publicly fixed-price.
-- Evaluation Edition is fully functional Desktop for 14 days from first activation, with no research-feature gating.
-- Evaluation expiry preserves all customer work; purchase should unlock the same installation without reinstall/migration.
-- V1 targets a lightweight storefront/download flow using Vercel + Supabase identity/license metadata + private Cloudflare R2 release storage. Customer trading/research data remains local-only and is never stored in our backend. Manual delivery remains acceptable for customer #1 if needed.
-- Trial download requires only verified email, not a full account; paid customers may use accounts for ownership, entitlements, downloads, licenses, docs, and releases.
-- The shared first-50 Founding Customer counter increments only on completed purchases and never resets as fake scarcity.
-- Early external acquisition should emphasize technical research/content and quant communities before paid advertising.
-- Purchased major versions are perpetual; maintenance releases are included while supported, while future major versions may be paid upgrades.
-- Product positioning centers on control, rigor, reproducibility, accessibility, and serious quant research without requiring the customer to build a Python quant stack—not on novelty or “AI magic.”
-- V1 is production/commercial quality; scope may be narrow but not provisional.

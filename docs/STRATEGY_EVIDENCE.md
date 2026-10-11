@@ -6,7 +6,8 @@ Supports PR-05, PR-06, PR-08 and PR-13. This document is normative for
 built-in strategies. Where `PROJECT.md`, `AGENTS.md`, [the validation
 contract](VALIDATION.md) or any research document disagrees, this one governs.
 
-V1 ships **3–4 distinct built-in strategies** (minimum three; target four).
+V1 ships **at least three distinct rule-based built-ins (target four) plus the
+ML-ranked rotation**.
 A strategy qualifies by meeting the definition below and shipping its complete
 evidence pack. There is **no return, Sharpe or benchmark-beating threshold**.
 A strategy that lost to buy-and-hold over the research period may ship if its
@@ -55,11 +56,18 @@ point-in-time data and remain research candidates until then.
 | Tactical equity/bond allocation | Dual momentum: relative and absolute momentum with a bond fallback | Antonacci 2014; Asness, Moskowitz and Pedersen 2013 |
 | Equity sector rotation, always invested | US sector rotation by 12-1 momentum | Jegadeesh and Titman 1993; Moskowitz and Grinblatt 1999 |
 | Diversified defensive allocation | Inverse-volatility / risk-parity allocation | Maillard, Roncalli and Teïletche 2010; Asness, Frazzini and Pedersen 2012 |
+| Model-ranked multi-asset rotation | ML-ranked rotation over a frozen ~60-ETF universe (Ridge baseline, then gradient-boosted ranking) | Gu, Kelly and Xiu 2020; Burges 2010 |
 
 Candidates overlap with configurations already inspected, including
 momentum and trend recipes on ETF-9 and low-volatility stock recipes (see
 [the research ledger](RESEARCH_LEDGER.md)); every registration cites its
 related rows under rule 2.
+
+The ML-ranked rotation's evidence pack also compares it with the plain 12-1
+momentum rule on the same universe and reports its overlap and return
+correlation with sector rotation. If the model adds nothing over the rule, the
+first page says so. Its scores are shown as ranks with a measured hit rate,
+never as probabilities.
 
 ## 2. Evidence pack
 
