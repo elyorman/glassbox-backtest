@@ -9,6 +9,19 @@ The `eodhd_actions` module audits saved split/dividend responses into
 reviewed action proposals with unresolved rows listed; it does not qualify
 coverage by itself.
 
+## Treasury cash rates
+
+`quant_core.data.treasury` reads the U.S. Treasury Daily Par Yield Curve, one
+public CSV per year. `TreasuryClient(cache_dir).year(year)` downloads a year;
+completed years (from 8 January of the next year) are cached, and the current
+year is downloaded each time. `parse_year` reads the "3 Mo" column by name (the
+column set changes between years), converts percent to a fraction and skips
+blank cells (holidays and a few missing days). `cash_rate_series(responses)`
+combines years into the `CashRateSeries` that `RunConfig.cash_rates` takes; see
+[the backtester](BACKTESTER.md). From 2003 to 2026 the latest observation before
+any SPY session was at most 4 days old; the engine refuses one older than 10
+days.
+
 ## EODHD price semantics
 
 The [official daily-data API](https://eodhd.com/financial-apis/api-for-historical-data-and-volumes)
