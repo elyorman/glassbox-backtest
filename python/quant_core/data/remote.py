@@ -7,6 +7,7 @@ retrieval time, so a cached request is not sent again.
 
 from datetime import datetime
 from hashlib import sha256
+from http.client import HTTPException
 import json
 import os
 from pathlib import Path
@@ -40,13 +41,17 @@ def fetch(url: str, headers: dict, timeout: int, label: str, messages=None) -> b
     try:
         with build_opener(_NoRedirect()).open(Request(url, headers=headers), timeout=timeout) as response:
             raw = response.read(MAX_RESPONSE_BYTES + 1)
+            missing = getattr(response, "length", None)  # Bytes promised by Content-Length but not received.
     except HTTPError as exc:
         status = exc.code if type(exc.code) is int else 0
         raise ValueError((messages or {}).get(status, f"{label} request failed (HTTP {status})")) from None
-    except OSError:
+    except (OSError, ValueError, HTTPException):
+        # Invalid headers and URLs raise ValueError with their content; never echo it.
         raise ValueError(f"{label} transport failed; check connectivity") from None
     if not isinstance(raw, bytes) or len(raw) > MAX_RESPONSE_BYTES:
         raise ValueError(f"{label} response exceeded the supported size")
+    if missing:
+        raise ValueError(f"{label} response was cut off; try again")
     return raw
 
 
@@ -76,7 +81,10 @@ def publish_bytes(raw: bytes, destination: Path, label: str) -> None:
         raise ValueError(f"Cannot persist {label} cache") from None
     finally:
         if temporary is not None:
-            temporary.unlink(missing_ok=True)
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass  # A leftover temporary file never affects the published one.
 
 
 class RequestCache:
@@ -124,9 +132,16 @@ class RequestCache:
                              "original bytes were not overwritten") from None
 
     def store(self, request: dict, raw: bytes, retrieved_at: datetime) -> None:
+        """Record a download; if the request is already recorded, the first record is kept."""
+        if json.loads(canonical_json(request)) != request or retrieved_at.utcoffset() is None:
+            raise ValueError(f"{self.label} cache needs plain JSON request fields and a timezone-aware time")
         digest = sha256(raw).hexdigest()
         publish_bytes(raw, self.directory / (digest + self.suffix), self.label)
         manifest = {"schema_version": 1, "request": request, "response_hash": digest,
                     "retrieved_at": retrieved_at.isoformat()}
         envelope = {"manifest_hash": content_hash(manifest), "manifest": manifest}
-        publish_bytes((canonical_json(envelope) + "\n").encode("utf-8"), self._manifest_path(request), self.label)
+        try:
+            publish_bytes((canonical_json(envelope) + "\n").encode("utf-8"), self._manifest_path(request), self.label)
+        except ValueError:
+            if self.load(request) is None:  # Raises if the existing record is corrupt.
+                raise
