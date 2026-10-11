@@ -3,7 +3,7 @@
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
+from decimal import Context, Decimal, ROUND_HALF_EVEN, localcontext
 import json
 from pathlib import Path
 from types import MappingProxyType
@@ -64,8 +64,9 @@ class SessionContext:
                 or self._calendar[first] != start or self._calendar[last] != end):
             raise ValueError("Cash growth requires calendar sessions with start <= end <= as_of")
         growth = Decimal(1)
-        for previous, day in zip(self._calendar[first:last], self._calendar[first + 1:last + 1]):
-            growth += self._cash_rates.accrual(growth, previous, day)
+        with localcontext(Context(prec=28, rounding=ROUND_HALF_EVEN)):  # The engine's context, whoever calls.
+            for previous, day in zip(self._calendar[first:last], self._calendar[first + 1:last + 1]):
+                growth += self._cash_rates.accrual(growth, previous, day)
         return growth
 
 

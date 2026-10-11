@@ -1,11 +1,11 @@
 """Read-only reference series and cash growth available to order sources."""
 
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from decimal import Context, Decimal, localcontext
 import unittest
 
 from quant_core.backtest import RunConfig, SourceSpec, run_backtest
-from quant_core.data import Bar, DataMetadata, Dividend, Security, Snapshot
+from quant_core.data import Bar, DataMetadata, Dividend, Security, Snapshot, Split
 from quant_core.data.rates import CashRateSeries
 from quant_core.execution import ExecutionProfile, OrderRequest
 
@@ -13,14 +13,20 @@ META = DataMetadata("synthetic", datetime(2024, 1, 10, tzinfo=timezone.utc),
                     "fixed_synthetic_universe", True, "synthetic_explicit_sessions")
 DAYS = (date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4), date(2024, 1, 5), date(2024, 1, 8))
 SECURITIES = (Security("A", "AAA", "SYNTHETIC"), Security("R", "RRR", "SYNTHETIC"), Security("X", "XXX", "SYNTHETIC"))
-RATES = CashRateSeries("test_source", "test_3m", META.retrieved_at, ((date(2023, 12, 29), "0.0365"),))
+# 3.65% is 0.0001 a day; 7.3%, observed on Wednesday 2024-01-03, is 0.0002 a day.
+RATES = CashRateSeries("test_source", "test_3m", META.retrieved_at,
+                       ((date(2023, 12, 29), "0.0365"), (date(2024, 1, 3), "0.073")))
 
 
 def snapshot(skip=None):
+    # R splits 2-for-1 on DAYS[2], so its price halves from 20 to 10; X, never readable, pays a dividend.
     bars = tuple(Bar(asset, day, price, price, price, price, "1000")
-                 for asset, price in (("A", "10"), ("R", "20"), ("X", "30")) for day in DAYS
+                 for asset, price0, price2 in (("A", "10", "10"), ("R", "20", "10"), ("X", "30", "30"))
+                 for day, price in zip(DAYS, (price0, price0, price2, price2, price2))
                  if (asset, day) != skip)
-    return Snapshot(DAYS, bars, META, SECURITIES, (Dividend("R", DAYS[1], "1", DAYS[1]),))
+    actions = (Dividend("R", DAYS[1], "1", DAYS[1]), Split("R", DAYS[2], new_shares=2, old_shares=1),
+               Dividend("X", DAYS[1], "1", DAYS[1]))
+    return Snapshot(DAYS, bars, META, SECURITIES, actions)
 
 
 class Reader:
@@ -52,6 +58,14 @@ class ReferenceTests(unittest.TestCase):
         self.assertEqual([(o.status, o.reason_code) for o in result.orders], [("rejected", "outside_universe")])
         self.assertEqual(result.fills, ())
 
+    def test_reference_actions_appear_on_their_date_and_unreadable_ones_never(self):
+        reader = Reader(lambda c: tuple((type(a).__name__, a.security_id) for a in c.splits + c.dividends))
+        run(reader, references=("R",))
+        seen = dict(reader.seen)
+        self.assertEqual(seen[DAYS[0]], ())
+        self.assertEqual(seen[DAYS[1]], (("Dividend", "R"),))
+        self.assertEqual(seen[DAYS[2]], (("Split", "R"), ("Dividend", "R")))
+
     def test_securities_outside_universe_and_references_stay_unreadable(self):
         with self.assertRaisesRegex(ValueError, "trading universe or references"):
             run(Reader(lambda c: c.history("X")), references=("R",))
@@ -76,13 +90,25 @@ class CashGrowthTests(unittest.TestCase):
         run(reader, cash_rates=RATES)
         growth = dict(reader.seen)
         self.assertEqual(growth[DAYS[0]], 1)
-        self.assertEqual(growth[DAYS[1]], Decimal("1.0001"))  # 3.65% / 365 for one day.
+        self.assertEqual(growth[DAYS[1]], Decimal("1.0001"))
+        # Thursday still uses 3.65%: the 7.3% was observed on Wednesday, not strictly before it.
         self.assertEqual(growth[DAYS[2]], Decimal("1.00020001"))
-        # Friday to Monday is three calendar days.
-        self.assertEqual(growth[DAYS[4]], growth[DAYS[3]] * (1 + Decimal("0.0003")))
+        self.assertEqual(growth[DAYS[3]], Decimal("1.000400050002"))
+        # Friday to Monday is three calendar days at 7.3%.
+        self.assertEqual(growth[DAYS[4]], growth[DAYS[3]] * (1 + Decimal("0.0006")))
 
     def test_cash_only_run_grows_exactly_like_cash_growth(self):
         reader = Reader(lambda c: c.cash_growth(DAYS[0], c.as_of))
+        result = run(reader, cash_rates=RATES)
+        # Exact because 100000 is a power of ten; other amounts agree to about 1e-24 relative.
+        self.assertEqual(result.equity[-1].equity, 100000 * reader.seen[-1][1])
+
+    def test_growth_ignores_the_callers_decimal_context(self):
+        def low_precision(context):
+            with localcontext(Context(prec=6)):
+                return context.cash_growth(DAYS[0], context.as_of)
+
+        reader = Reader(low_precision)
         result = run(reader, cash_rates=RATES)
         self.assertEqual(result.equity[-1].equity, 100000 * reader.seen[-1][1])
 
