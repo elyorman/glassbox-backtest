@@ -1,6 +1,6 @@
 """Scheduled engineering inputs and a causal callback boundary for later strategies."""
 
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -10,6 +10,7 @@ from types import MappingProxyType
 from typing import Mapping, Protocol
 
 from quant_core.data import Bar, Dividend, Split, session
+from quant_core.data.rates import CashRateSeries
 from quant_core.execution import OrderRequest
 from quant_core.sizing import EntryIntent
 from quant_core.portfolio import PositionValue
@@ -28,10 +29,16 @@ class SessionContext:
     _dates: Mapping[str, tuple[date, ...]] = field(repr=False)
     _splits: tuple[Split, ...] = field(repr=False)
     _dividends: tuple[Dividend, ...] = field(default=(), repr=False)
+    references: tuple[str, ...] = ()  # Readable, never tradable.
+    _calendar: tuple[date, ...] = field(default=(), repr=False)
+    _cash_rates: CashRateSeries | None = field(default=None, repr=False)
+
+    def _readable(self, security_id):
+        return security_id in self.universe or security_id in self.references
 
     def history(self, security_id: str, limit: int | None = None) -> tuple[Bar, ...]:
-        if security_id not in self.universe:
-            raise ValueError("Historical access requires a security in the trading universe")
+        if not self._readable(security_id):
+            raise ValueError("Historical access requires a security in the trading universe or references")
         if limit is not None and (type(limit) is not int or limit <= 0):
             raise ValueError("History limit must be a positive integer")
         stop = bisect_right(self._dates.get(security_id, ()), self.as_of)
@@ -40,11 +47,26 @@ class SessionContext:
 
     @property
     def splits(self):
-        return tuple(s for s in self._splits if s.session <= self.as_of and s.security_id in self.universe)
+        return tuple(s for s in self._splits if s.session <= self.as_of and self._readable(s.security_id))
 
     @property
     def dividends(self):
-        return tuple(d for d in self._dividends if d.session <= self.as_of and d.security_id in self.universe)
+        return tuple(d for d in self._dividends if d.session <= self.as_of and self._readable(d.security_id))
+
+    def cash_growth(self, start: date, end: date) -> Decimal:
+        """Growth of 1 unit of idle cash from the close of `start` to the close of `end`, accrued as the engine does."""
+        if self._cash_rates is None:
+            raise ValueError("Cash growth requires RunConfig.cash_rates")
+        session(start)
+        session(end)
+        first, last = bisect_left(self._calendar, start), bisect_left(self._calendar, end)
+        if (start > end or end > self.as_of or last >= len(self._calendar)
+                or self._calendar[first] != start or self._calendar[last] != end):
+            raise ValueError("Cash growth requires calendar sessions with start <= end <= as_of")
+        growth = Decimal(1)
+        for previous, day in zip(self._calendar[first:last], self._calendar[first + 1:last + 1]):
+            growth += self._cash_rates.accrual(growth, previous, day)
+        return growth
 
 
 @dataclass(frozen=True)

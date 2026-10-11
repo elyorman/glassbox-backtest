@@ -51,6 +51,8 @@ class _Simulation:
         universe = config.universe or tuple(sorted(self.registry))
         if any(a not in self.registry for a in universe):
             raise ValueError("Universe contains unknown security IDs")
+        if any(a not in self.registry or a in universe for a in config.references):
+            raise ValueError("References must be known securities outside the trading universe")
         start, end = config.start or snapshot.sessions[0], config.end or snapshot.sessions[-1]
         if start not in snapshot.sessions or end not in snapshot.sessions or start > end:
             raise ValueError("Run boundaries must be supplied calendar sessions, start <= end")
@@ -73,7 +75,8 @@ class _Simulation:
             if any(entry.signal_date not in calendar for entry in source.entries):
                 raise ValueError("Scheduled signal date lies outside the supplied calendar")
         quality = check_quality(snapshot, strict_discontinuities=config.strict_discontinuities)
-        errors = [i for i in quality.issues if i.severity == "error" and i.security_id in universe
+        watched = set(universe) | set(config.references)
+        errors = [i for i in quality.issues if i.severity == "error" and i.security_id in watched
                   and (i.session is None or i.session <= end)]
         blocking = [issue for issue in errors
                     if config.data_policy == "strict" or issue.code != "missing_bar"]
@@ -495,7 +498,8 @@ class _Simulation:
 
     def _submit(self, day, next_day, state):
         context = SessionContext(day, self.config.universe, state.cash, state.equity, state.positions,
-                                 self.histories, self.history_dates, self.splits, self.dividends)
+                                 self.histories, self.history_dates, self.splits, self.dividends,
+                                 self.config.references, self.snapshot.sessions, self.config.cash_rates)
         response = self.source.orders(context)
         if isinstance(response, OrderBatch):
             decisions = response.decisions

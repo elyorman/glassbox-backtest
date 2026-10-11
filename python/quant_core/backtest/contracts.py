@@ -26,6 +26,7 @@ class RunConfig:
     execution_delay_sessions: int = 1
     strict_discontinuities: bool = False
     cash_rates: CashRateSeries | None = None  # None: idle cash earns nothing.
+    references: tuple[str, ...] = ()  # Registry securities a source may read but never trade.
 
     def __post_init__(self):
         object.__setattr__(self, "initial_cash", number(self.initial_cash))
@@ -37,6 +38,12 @@ class RunConfig:
         if len(set(universe)) != len(universe):
             raise ValueError("Duplicate universe security")
         object.__setattr__(self, "universe", tuple(sorted(universe)))
+        references = tuple(self.references)
+        for asset in references:
+            identity(asset)
+        if len(set(references)) != len(references):
+            raise ValueError("Duplicate reference security")
+        object.__setattr__(self, "references", tuple(sorted(references)))
         for day in (self.start, self.end):
             if day is not None:
                 session(day)
