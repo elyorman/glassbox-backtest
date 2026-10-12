@@ -10,6 +10,7 @@ from urllib.error import HTTPError, URLError
 
 from quant_core.data import Dividend, Security, Split, require_raw_volume
 from quant_core.data.quality import check_quality
+from quant_core.data.remote import RequestCache
 from quant_core.data.tiingo import NO_PAYMENT_DATES, TiingoClient, TiingoJsonSource, TiingoResponse
 
 AT = datetime(2024, 1, 10, 23, 30, tzinfo=timezone.utc)
@@ -191,6 +192,31 @@ class TiingoClientTests(unittest.TestCase):
             self.assertEqual(list(Path(directory).glob("*.request.json")), [])
             self.assertEqual(len(list(Path(directory).glob("*.json"))), 1)
 
+    def test_a_price_response_is_final_once_it_holds_its_end_date_or_a_week_has_passed(self):
+        three = ("[" + ",".join((row(D1, "100"), row(D2, "100"), row(D3, "100"))) + "]").encode()
+        cases = [(datetime(2024, 1, 4, 23, 0, tzinfo=timezone.utc), three, True),  # End-date bar present.
+                 (datetime(2024, 1, 4, 23, 0, tzinfo=timezone.utc), self.RAW, False),  # Missing: may come late.
+                 (datetime(2024, 1, 10, 23, 0, tzinfo=timezone.utc), self.RAW, False),  # Six days on.
+                 (datetime(2024, 1, 11, 23, 0, tzinfo=timezone.utc), self.RAW, True)]  # Seven days on.
+        for now, raw, cached in cases:
+            with self.subTest(now=now, cached=cached), TemporaryDirectory() as directory, \
+                    patch("quant_core.data.tiingo._now", return_value=now):
+                self.call(TiingoClient("SECRET-1", Path(directory)), "prices", "SPY", D1, D3, raw=raw)
+                self.assertEqual(len(list(Path(directory).glob("*.request.json"))), int(cached))
+        before = datetime(2024, 1, 4, 22, 59, tzinfo=timezone.utc)
+        with TemporaryDirectory() as directory, patch("quant_core.data.tiingo._now", return_value=before):
+            with self.assertRaisesRegex(ValueError, "partial session"):
+                self.call(TiingoClient("SECRET-1", Path(directory)), "prices", "SPY", D1, D3, raw=three)
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_cached_responses_are_validated_again(self):
+        with TemporaryDirectory() as directory:
+            request = {"startDate": "2024-01-02", "endDate": "2024-01-04", "endpoint": "prices", "ticker": "SPY"}
+            RequestCache(Path(directory), "Tiingo", ".json").store(request, b"[]", AT)
+            with patch("quant_core.data.remote.build_opener", side_effect=AssertionError("cached")):
+                with self.assertRaisesRegex(ValueError, "not a nonempty daily array"):
+                    TiingoClient("SECRET-1", Path(directory)).prices("SPY", D1, D3)
+
     def test_metadata_is_validated_and_cached(self):
         with TemporaryDirectory() as directory:
             client = TiingoClient("SECRET-1", Path(directory))
@@ -225,10 +251,17 @@ class TiingoClientTests(unittest.TestCase):
                 self.call(client, "prices", "SPY", D1, date(2999, 12, 31), raw=partial)
             with self.assertRaisesRegex(ValueError, "outside the requested dates"):
                 self.call(client, "prices", "SPY", D2, D3)
+            two = ("[" + ",".join((row(D1, "100"), row(D2, "100"))) + "]").encode()
+            with self.assertRaisesRegex(ValueError, "outside the requested dates"):
+                self.call(client, "prices", "SPY", D1, D1, raw=two)
+            with self.assertRaisesRegex(ValueError, "upper-case"):
+                self.call(client, "metadata", "spy")
             self.assertEqual(list(Path(directory).iterdir()), [])
-        for token in ("", "two words", None):
-            with self.subTest(token=token), self.assertRaises(ValueError):
+        for token in ("", "two words", None, "k\u00e9y"):
+            with self.subTest(token=token), self.assertRaisesRegex(ValueError, "printable ASCII"):
                 TiingoClient(token, Path("unused"))
+        with self.assertRaisesRegex(ValueError, "timeout"):
+            TiingoClient("SECRET-1", Path("unused"), timeout=0)
 
 
 if __name__ == "__main__":

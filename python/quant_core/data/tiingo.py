@@ -36,6 +36,7 @@ PROVIDER_ACTIONS = ("Corporate actions are Tiingo's reported cash dividends and 
 CURRENT_TICKERS = "Securities are identified by current ticker; renamed or delisted tickers are not tracked."
 # Tiingo's adjClose follows its own dividend formula to about 1e-11; EEM's reported 3.000003 split is 1e-6 off.
 ADJUSTMENT_TOLERANCE = "0.00001"
+FINAL_MARGIN_DAYS = 7  # A range ending on a weekend or holiday has no end-date bar; a week covers any closure.
 
 
 def check_ticker(value):
@@ -221,21 +222,28 @@ class TiingoJsonSource:
                                 f"{self.calendar_ticker.lower()}_trading_days_tiingo", "raw",
                                 tuple(dict.fromkeys(limitations)), tuple(hashes))
         return Snapshot(sessions, tuple(bars), metadata, tuple(securities), tuple(actions))
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
 @dataclass(frozen=True)
 class TiingoClient:
     """Explicit single-ticker downloads with no retries.
 
-    A request whose end date is already final is cached and never sent again; use a
-    new cache directory to retrieve revised data. Requests ending later are sent each
-    time, and every response body is kept under its SHA-256.
+    A price response is cached, and its request never sent again, once it holds the
+    end date's bar or the end date is at least FINAL_MARGIN_DAYS before the last final
+    session; metadata is always cached. Use a new cache directory to retrieve revised
+    data. Every validated response body is kept under its SHA-256.
     """
     api_token: str = field(repr=False)
     cache_dir: Path
     timeout: int = 30
 
     def __post_init__(self):
-        if not isinstance(self.api_token, str) or not self.api_token or any(c.isspace() for c in self.api_token):
-            raise ValueError("Tiingo API key must be supplied explicitly and contain no spaces")
+        if not isinstance(self.api_token, str) or re.fullmatch(r"[!-~]+", self.api_token) is None:
+            raise ValueError("Tiingo API key must be supplied explicitly as printable ASCII without spaces")
         if type(self.timeout) is not int or self.timeout <= 0:
             raise ValueError("Tiingo timeout must be a positive number of seconds")
         object.__setattr__(self, "cache_dir", Path(self.cache_dir))
@@ -248,12 +256,13 @@ class TiingoClient:
         return self._get(dict(dates, endpoint="prices", ticker=ticker),
                          f"{BASE_URL}{ticker}/prices?" + urlencode(dict(dates, format="json")),
                          lambda raw, at: price_rows(raw, ticker, at, start, end),
-                         lambda at: end <= last_final_day(at))
+                         lambda rows, at: (rows[-1].day == end
+                                           or end <= last_final_day(at) - timedelta(days=FINAL_MARGIN_DAYS)))
 
     def metadata(self, ticker: str) -> TiingoResponse:
         check_ticker(ticker)
         return self._get({"endpoint": "metadata", "ticker": ticker}, BASE_URL + ticker,
-                         lambda raw, at: metadata_exchange(raw, ticker), lambda at: True)
+                         lambda raw, at: metadata_exchange(raw, ticker), lambda exchange, at: True)
 
     def _get(self, request, url, validate, final):
         cache = RequestCache(self.cache_dir, "Tiingo", ".json")
@@ -263,9 +272,8 @@ class TiingoClient:
             return TiingoResponse(*cached)
         raw = fetch(url, {"Accept": "application/json", "Authorization": "Token " + self.api_token,
                           "User-Agent": "quant-platform-core"}, self.timeout, "Tiingo", ERRORS)
-        retrieved_at = datetime.now(timezone.utc)
-        validate(raw, retrieved_at)
-        if final(retrieved_at):
+        retrieved_at = _now()
+        if final(validate(raw, retrieved_at), retrieved_at):
             cache.store(request, raw, retrieved_at)
         else:
             publish_bytes(raw, self.cache_dir / (sha256(raw).hexdigest() + ".json"), "Tiingo")
