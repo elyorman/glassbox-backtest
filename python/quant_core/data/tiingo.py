@@ -1,8 +1,10 @@
-"""Tiingo end-of-day prices: offline normalization into a raw-price Snapshot.
+"""Tiingo end-of-day prices: explicit downloads and offline normalization into a Snapshot.
 
 Raw open/high/low/close/volume are the execution prices and raw share volume.
 Tiingo reports cash dividends (`divCash`, ex-date) and splits (`splitFactor`,
-new/old shares) on each bar; `adjClose` is used only to cross-check them.
+new/old shares) on each bar; `adjClose` is used only to cross-check them. The
+API token travels only in the Authorization header: never in URLs, cache files,
+manifests or error text.
 """
 
 from collections.abc import Mapping
@@ -12,12 +14,19 @@ from decimal import Decimal
 from fractions import Fraction
 from hashlib import sha256
 import json
+from pathlib import Path
 import re
+from urllib.parse import urlencode
 
 from quant_core.data import Bar, DataMetadata, Dividend, Security, Snapshot, Split, number
 from quant_core.data.adjustments import provider_adjustment_disagreements
-from quant_core.data.remote import unique_object
+from quant_core.data.remote import RequestCache, fetch, publish_bytes, unique_object
 
+BASE_URL = "https://api.tiingo.com/tiingo/daily/"
+ERRORS = {401: "Tiingo rejected the API key (HTTP 401); check the key",
+          403: "Tiingo rejected the API key (HTTP 403); check the key and its plan",
+          404: "Tiingo does not know this ticker (HTTP 404)",
+          429: "Tiingo rate limit reached (HTTP 429); cached tickers are kept, resume later"}
 TICKER = re.compile(r"[A-Z][A-Z0-9-]{0,9}")
 _DATE = re.compile(r"(\d{4}-\d{2}-\d{2})T00:00:00(?:\.0+)?Z")
 _FIELDS = frozenset(("date", "open", "high", "low", "close", "volume", "adjClose", "divCash", "splitFactor"))
@@ -212,3 +221,52 @@ class TiingoJsonSource:
                                 f"{self.calendar_ticker.lower()}_trading_days_tiingo", "raw",
                                 tuple(dict.fromkeys(limitations)), tuple(hashes))
         return Snapshot(sessions, tuple(bars), metadata, tuple(securities), tuple(actions))
+@dataclass(frozen=True)
+class TiingoClient:
+    """Explicit single-ticker downloads with no retries.
+
+    A request whose end date is already final is cached and never sent again; use a
+    new cache directory to retrieve revised data. Requests ending later are sent each
+    time, and every response body is kept under its SHA-256.
+    """
+    api_token: str = field(repr=False)
+    cache_dir: Path
+    timeout: int = 30
+
+    def __post_init__(self):
+        if not isinstance(self.api_token, str) or not self.api_token or any(c.isspace() for c in self.api_token):
+            raise ValueError("Tiingo API key must be supplied explicitly and contain no spaces")
+        if type(self.timeout) is not int or self.timeout <= 0:
+            raise ValueError("Tiingo timeout must be a positive number of seconds")
+        object.__setattr__(self, "cache_dir", Path(self.cache_dir))
+
+    def prices(self, ticker: str, start: date, end: date) -> TiingoResponse:
+        check_ticker(ticker)
+        if type(start) is not date or type(end) is not date or end < start:
+            raise ValueError("Tiingo price request requires ascending date bounds")
+        dates = {"startDate": start.isoformat(), "endDate": end.isoformat()}
+        return self._get(dict(dates, endpoint="prices", ticker=ticker),
+                         f"{BASE_URL}{ticker}/prices?" + urlencode(dict(dates, format="json")),
+                         lambda raw, at: price_rows(raw, ticker, at, start, end),
+                         lambda at: end <= last_final_day(at))
+
+    def metadata(self, ticker: str) -> TiingoResponse:
+        check_ticker(ticker)
+        return self._get({"endpoint": "metadata", "ticker": ticker}, BASE_URL + ticker,
+                         lambda raw, at: metadata_exchange(raw, ticker), lambda at: True)
+
+    def _get(self, request, url, validate, final):
+        cache = RequestCache(self.cache_dir, "Tiingo", ".json")
+        cached = cache.load(request)
+        if cached is not None:
+            validate(*cached)
+            return TiingoResponse(*cached)
+        raw = fetch(url, {"Accept": "application/json", "Authorization": "Token " + self.api_token,
+                          "User-Agent": "quant-platform-core"}, self.timeout, "Tiingo", ERRORS)
+        retrieved_at = datetime.now(timezone.utc)
+        validate(raw, retrieved_at)
+        if final(retrieved_at):
+            cache.store(request, raw, retrieved_at)
+        else:
+            publish_bytes(raw, self.cache_dir / (sha256(raw).hexdigest() + ".json"), "Tiingo")
+        return TiingoResponse(raw, retrieved_at)

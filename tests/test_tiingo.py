@@ -1,12 +1,16 @@
-"""Tiingo normalization; fixtures are synthetic rows in Tiingo's published response format."""
+"""Tiingo downloads and normalization; fixtures are synthetic rows in Tiingo's response format."""
 
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
+from urllib.error import HTTPError, URLError
 
 from quant_core.data import Dividend, Security, Split, require_raw_volume
 from quant_core.data.quality import check_quality
-from quant_core.data.tiingo import NO_PAYMENT_DATES, TiingoJsonSource, TiingoResponse
+from quant_core.data.tiingo import NO_PAYMENT_DATES, TiingoClient, TiingoJsonSource, TiingoResponse
 
 AT = datetime(2024, 1, 10, 23, 30, tzinfo=timezone.utc)
 D1, D2, D3 = date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4)
@@ -148,6 +152,83 @@ class TiingoSourceTests(unittest.TestCase):
         for tickers in ({"SPY": SPY, "gld": SPY}, {"SPY": SPY, 7: SPY}):
             with self.subTest(tickers=tuple(tickers)), self.assertRaisesRegex(ValueError, "upper-case"):
                 load(tickers, {ticker: meta("SPY") for ticker in tickers})
+
+
+class TiingoClientTests(unittest.TestCase):
+    RAW = ("[" + row(D1, "100") + "]").encode()
+
+    def call(self, client, method, *args, raw=None, error=None):
+        with patch("quant_core.data.remote.build_opener") as opener:
+            if error is not None:
+                opener.return_value.open.side_effect = error
+            else:
+                opener.return_value.open.return_value = BytesIO(self.RAW if raw is None else raw)
+            response = getattr(client, method)(*args)
+        return response, opener.return_value.open.call_args_list
+
+    def test_key_travels_only_in_the_header_and_final_requests_are_cached(self):
+        with TemporaryDirectory() as directory:
+            client = TiingoClient("SECRET-1", Path(directory))
+            self.assertNotIn("SECRET", repr(client))
+            first, calls = self.call(client, "prices", "SPY", D1, D3)
+            (request,), kwargs = calls[0]
+            self.assertEqual(request.full_url, "https://api.tiingo.com/tiingo/daily/SPY/prices"
+                                               "?startDate=2024-01-02&endDate=2024-01-04&format=json")
+            self.assertEqual(request.get_header("Authorization"), "Token SECRET-1")
+            self.assertEqual(kwargs, {"timeout": 30})
+            self.assertEqual(first.raw, self.RAW)
+            with patch("quant_core.data.remote.build_opener", side_effect=AssertionError("cached")):
+                self.assertEqual(client.prices("SPY", D1, D3), first)
+            for path in Path(directory).iterdir():
+                self.assertNotIn("SECRET", path.name + path.read_text())
+
+    def test_requests_that_end_today_or_later_are_sent_again(self):
+        with TemporaryDirectory() as directory:
+            client = TiingoClient("SECRET-1", Path(directory))
+            for _ in range(2):
+                _, calls = self.call(client, "prices", "SPY", D1, date(2999, 1, 1))
+                self.assertEqual(len(calls), 1)
+            self.assertEqual(list(Path(directory).glob("*.request.json")), [])
+            self.assertEqual(len(list(Path(directory).glob("*.json"))), 1)
+
+    def test_metadata_is_validated_and_cached(self):
+        with TemporaryDirectory() as directory:
+            client = TiingoClient("SECRET-1", Path(directory))
+            response, calls = self.call(client, "metadata", "SPY", raw=meta("SPY").raw)
+            self.assertEqual(calls[0][0][0].full_url, "https://api.tiingo.com/tiingo/daily/SPY")
+            self.assertEqual(self.call(client, "metadata", "SPY")[1], [])
+            with self.assertRaisesRegex(ValueError, "metadata for IEF"):
+                self.call(client, "metadata", "IEF", raw=meta("SPY").raw)
+
+    def test_errors_explain_the_problem_without_the_key(self):
+        url = "https://api.tiingo.com/tiingo/daily/SPY/prices"
+        cases = [(401, "rejected the API key"), (403, "rejected the API key"), (404, "does not know this ticker"),
+                 (429, "rate limit .* resume later"), (500, r"HTTP 500")]
+        for code, message in cases:
+            with self.subTest(code=code), TemporaryDirectory() as directory:
+                error = HTTPError(url, code, "SECRET-1", {}, BytesIO(b"SECRET-1"))
+                with self.assertRaisesRegex(ValueError, message) as caught:
+                    self.call(TiingoClient("SECRET-1", Path(directory)), "prices", "SPY", D1, D3, error=error)
+                self.assertNotIn("SECRET", str(caught.exception))
+                self.assertEqual(list(Path(directory).iterdir()), [])
+        with TemporaryDirectory() as directory, self.assertRaisesRegex(ValueError, "transport"):
+            self.call(TiingoClient("SECRET-1", Path(directory)), "prices", "SPY", D1, D3, error=URLError(url))
+
+    def test_invalid_requests_and_responses_leave_no_cache(self):
+        with TemporaryDirectory() as directory:
+            client = TiingoClient("SECRET-1", Path(directory))
+            for args in (("spy", D1, D3), ("SPY/../x", D1, D3), ("SPY", D3, D1), ("SPY", datetime(2024, 1, 2), D3)):
+                with self.subTest(args=args), self.assertRaises(ValueError):
+                    self.call(client, "prices", *args)
+            partial = ("[" + row(date(2999, 1, 2), "100") + "]").encode()
+            with self.assertRaisesRegex(ValueError, "partial session"):
+                self.call(client, "prices", "SPY", D1, date(2999, 12, 31), raw=partial)
+            with self.assertRaisesRegex(ValueError, "outside the requested dates"):
+                self.call(client, "prices", "SPY", D2, D3)
+            self.assertEqual(list(Path(directory).iterdir()), [])
+        for token in ("", "two words", None):
+            with self.subTest(token=token), self.assertRaises(ValueError):
+                TiingoClient(token, Path("unused"))
 
 
 if __name__ == "__main__":

@@ -110,7 +110,7 @@ credentials without printing them. `market_backtest.py` normalizes the frozen
 ten-symbol dataset, reconciles issuer cash distributions/payment dates, and
 retains vendor discrepancies. This is a narrow exploratory script, not the
 production provider adapter. The V1 product adapter is Tiingo (see
-[the roadmap](ROADMAP.md)); `market_backtest.py` and the other 2026-10
+[provider integration](DATA_INTEGRATION.md)); `market_backtest.py` and the other 2026-10
 research scripts are retained under the git tag `archive/research-2026-10`.
 
 - Alpaca development adapter, immutable raw downloads, retries/rate limits, and qualified daily-open/feed semantics.

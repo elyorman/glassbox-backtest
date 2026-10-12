@@ -1,4 +1,4 @@
-# EODHD and local Parquet integration
+# Provider integration: Tiingo, Treasury, EODHD and local Parquet
 
 This implements part of PR-01's provider/local-file contract. The tests establish
 normalization, exact values, identity/calendar boundaries, provenance and local
@@ -8,6 +8,45 @@ licensing, empirical strategy quality or release readiness.
 The `eodhd_actions` module audits saved split/dividend responses into
 reviewed action proposals with unresolved rows listed; it does not qualify
 coverage by itself.
+
+## Tiingo (tester release)
+
+`quant_core.data.tiingo` is the tester release's only market-data provider.
+Users supply their own Tiingo key; the free tier allows 50 requests an hour and
+1,000 a day.
+
+- **Download.** `TiingoClient(api_key, cache_dir)` has `prices(ticker, start,
+  end)` and `metadata(ticker)`; each sends one request, without redirects or
+  retries. The key travels only in the `Authorization` header and never appears
+  in URLs, cache files, manifests or error messages. A request whose end date is
+  already final is cached and never sent again; a request ending today or later
+  is sent each time. Every response body is kept under its SHA-256. Errors say
+  what to do: key rejected (HTTP 401/403), unknown ticker (404), rate limit
+  (429: resume later; cached tickers are kept).
+- **Normalization.** `TiingoJsonSource(prices, metadata).load()` turns saved
+  responses into a raw-price `Snapshot`:
+  - Bars use raw `open`, `high`, `low`, `close` and raw share `volume`
+    (`adjustment_policy = raw`).
+  - `divCash > 0` becomes a `Dividend` on the ex-date. Tiingo gives no payment
+    date, so payment is assumed on the ex-date, and the snapshot says so.
+  - `splitFactor ≠ 1` becomes a `Split` with exact share counts (denominator at
+    most 1000). A factor with float noise, such as EEM's 3.000003, is treated as
+    3-for-1, and the snapshot says so.
+  - Corporate actions are declared complete and cross-checked against
+    `adjClose` with the EODHD rule below; an unexplained adjustment stops the
+    import.
+  - The calendar is one ticker's trading days (`SPY` by default); a bar on any
+    other day stops the import. A security's listing date is its first bar.
+  - A bar dated on or after the retrieval day is refused unless it was retrieved
+    after 23:00 UTC (18:00 New York standard time, 19:00 daylight time), so a
+    partial session never enters a snapshot.
+- **Checked on real data (2026-10-11).** SPY, IEF, TLT, GLD, EFA, EEM, VNQ,
+  XLK and BIL from inception, and AAPL around its 2020 split: 55,828 bars, no
+  cross-check mismatches, no invalid OHLC rows, every ticker's dates inside
+  SPY's, and raw volume confirmed unadjusted (AAPL's pre-split volume is a
+  quarter of `adjVolume`).
+
+There is no download command yet; it is roadmap step E.
 
 ## Treasury cash rates
 
