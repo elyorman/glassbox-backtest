@@ -17,8 +17,8 @@ non-trader can use it in ten minutes.**
 
 | Area | State |
 | --- | --- |
-| Market data | CSV/JSON/Parquet snapshots, EODHD import with provider adjustment cross-check, data-quality checks, dated index membership. Tiingo adapter: next. |
-| Backtester | Next-open fills, shared cash, costs, splits/dividends/delistings, stops, full audit bundles. |
+| Market data | Tiingo download and import (the tester release's provider), Treasury 3-month cash rates, CSV/JSON/Parquet snapshots, EODHD import, provider adjustment cross-checks, data-quality checks, dated index membership. |
+| Backtester | Next-open fills, shared cash, costs, idle-cash interest, splits/dividends/delistings, stops, read-only reference series, entry-to-exit trade records, full audit bundles. |
 | Risk and sizing | Position, cash, exposure, liquidity and drawdown limits; fixed, fractional and ATR sizing; every refusal recorded. |
 | Strategies | Six research rule families. The five V1 plans: not built yet. |
 | Validation | Campaign framework, stationary bootstrap, cost and period breakdowns. Evidence-pack report: not built yet. |
