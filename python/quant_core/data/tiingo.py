@@ -220,6 +220,9 @@ class TiingoJsonSource:
             if outside and outside[-1] > sessions[-1]:
                 raise ValueError(f"Tiingo bar {outside[-1]} for {ticker} is after the last {self.calendar_ticker} "
                                  f"session in the download; download {self.calendar_ticker} through the same date")
+            if outside and outside[0] < sessions[0]:
+                raise ValueError(f"Tiingo bar {outside[0]} for {ticker} is before the first {self.calendar_ticker} "
+                                 f"session in the download; download {self.calendar_ticker} from the same start date")
             if outside:
                 raise ValueError(f"Tiingo bar {outside[0]} for {ticker} is not a {self.calendar_ticker} trading day")
         retrieved_at = max(r.retrieved_at for r in responses).astimezone(timezone.utc)

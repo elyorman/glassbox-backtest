@@ -119,8 +119,10 @@ class TiingoSourceTests(unittest.TestCase):
         self.assertEqual({s.security_id: s.listed_on for s in data.securities}, {"SPY": D1, "GLD": D2})
         with self.assertRaisesRegex(ValueError, "2024-01-05 for GLD is after the last SPY session in the download"):
             load({"SPY": SPY, "GLD": prices(row(D3, "50"), row(date(2024, 1, 5), "50"))})
-        with self.assertRaisesRegex(ValueError, "2024-01-01 for GLD is not a SPY trading day"):
+        with self.assertRaisesRegex(ValueError, "2024-01-01 for GLD is before the first SPY session in the download"):
             load({"SPY": SPY, "GLD": prices(row(date(2024, 1, 1), "50"), row(D2, "50"))})
+        with self.assertRaisesRegex(ValueError, "2024-01-03 for GLD is not a SPY trading day"):
+            load({"SPY": prices(row(D1, "100"), row(D3, "100")), "GLD": prices(row(D2, "50"), row(D3, "50"))})
         with self.assertRaisesRegex(ValueError, "Calendar ticker SPY"):
             load({"GLD": late})
 

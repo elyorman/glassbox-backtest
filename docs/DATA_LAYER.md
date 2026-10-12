@@ -4,7 +4,7 @@ Status: initial Stage 1 foundation implemented, 2026-10-02. The nine-stage build
 
 ## Implemented contract
 
-The core uses the Python standard library; optional Parquet storage uses PyArrow. `SnapshotSource.load()` returns an immutable `Snapshot`, independently of the eventual vendor adapter. The CSV and EODHD adapters preserve raw bytes and input hashes. [Provider/Parquet commands](DATA_INTEGRATION.md) and [dated membership](UNIVERSES.md) extend this foundation without establishing empirical coverage or licensing qualification.
+The core uses the Python standard library; optional Parquet storage uses PyArrow. `SnapshotSource.load()` returns an immutable `Snapshot`, independently of the eventual vendor adapter. The CSV, EODHD and Tiingo adapters preserve raw bytes and input hashes. [Provider/Parquet commands](DATA_INTEGRATION.md) and [dated membership](UNIVERSES.md) extend this foundation without establishing empirical coverage or licensing qualification.
 
 A snapshot includes an explicit ascending session calendar, security registry, raw OHLCV bars, typed corporate actions, and metadata. Every bar must have a known security ID, valid positive prices and OHLC relationships, nonnegative volume, and a session within both the calendar and its security's lifetime. Duplicate bars/actions and adjusted execution inputs are rejected.
 
@@ -12,7 +12,7 @@ Security IDs are the identity keys, not ticker strings. The registry supplies di
 
 Calendar sessions must be supplied independently of observed bars. Deriving them from available bars would hide missing observations. The checker validates consistency against the supplied calendar, not the calendar's correctness against an exchange. Production exchange-calendar qualification remains pending.
 
-Corporate actions are split ratios (new shares / old shares), dividend ex-dates with cash amounts and pay dates, and explicit cash-per-share delisting settlements. Missing payment dates cannot be silently replaced with ex-dates. Same-day split/dividend data declares the dividend per post-split share. This schema records events; portfolio processing belongs to the backtester stage.
+Corporate actions are split ratios (new shares / old shares), dividend ex-dates with cash amounts and pay dates, and explicit cash-per-share delisting settlements. Missing payment dates are never silently replaced with ex-dates; the Tiingo import, whose provider gives none, assumes payment on the ex-date and records that limitation in the snapshot. Same-day split/dividend data declares the dividend per post-split share. This schema records events; portfolio processing belongs to the backtester stage.
 
 The Python split contract also accepts original positive integer `new_shares`
 and `old_shares` together, for example `Split(id, day, new_shares=1,

@@ -15,6 +15,7 @@ from quant_core.backtest.contracts import (
 from quant_core.backtest.sources import OrderBatch, OrderSchedule, OrderSource, SessionContext
 from quant_core.data import CashDelisting, Dividend, Snapshot, Split, require_raw_volume
 from quant_core.data.quality import check_quality
+from quant_core.data.rates import MAX_RATE_AGE_DAYS
 from quant_core.execution import OrderRequest
 from quant_core.portfolio import PortfolioLedger, Receivable, ZERO, reconciles
 from quant_core.provenance import content_hash
@@ -88,9 +89,9 @@ class _Simulation:
         cash_yield = ("cash return zero" if config.cash_rates is None else
                       f"idle cash at each session's close earns {config.cash_rates.series} "
                       f"({config.cash_rates.source}) until the next session: the latest observation strictly "
-                      "before the earlier session (at most 10 days old), simple ACT/365 over the calendar days "
-                      "between them, credited at the start of the next session before corporate actions, stops "
-                      "and orders; unpaid dividend receivables earn nothing")
+                      f"before the earlier session (at most {MAX_RATE_AGE_DAYS} days old), simple ACT/365 over "
+                      "the calendar days between them, credited at the start of the next session before "
+                      "corporate actions, stops and orders; unpaid dividend receivables earn nothing")
         assumptions = (
             f"USD long-only; no leverage; {cash_yield}",
             "Decimal precision 28, half-even rounding; intermediate money is not rounded to cents",
