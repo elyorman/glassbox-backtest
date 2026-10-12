@@ -25,6 +25,8 @@ NO_PAYMENT_DATES = "Tiingo supplies no dividend payment dates; dividends are ass
 PROVIDER_ACTIONS = ("Corporate actions are Tiingo's reported cash dividends and splits, cross-checked against "
                     "Tiingo's adjusted close; they are not verified against an independent source.")
 CURRENT_TICKERS = "Securities are identified by current ticker; renamed or delisted tickers are not tracked."
+# Tiingo's adjClose follows its own dividend formula to about 1e-11; EEM's reported 3.000003 split is 1e-6 off.
+ADJUSTMENT_TOLERANCE = "0.00001"
 
 
 def check_ticker(value):
@@ -36,6 +38,8 @@ def check_ticker(value):
 def last_final_day(retrieved_at: datetime) -> date:
     """Latest session whose bar is final when retrieved: 23:00 UTC is 18:00 New York standard time
     (19:00 in daylight time), after the close and Tiingo's end-of-day update."""
+    if not isinstance(retrieved_at, datetime) or retrieved_at.utcoffset() is None:
+        raise ValueError("Tiingo retrieval time must be timezone-aware")
     return (retrieved_at.astimezone(timezone.utc) - timedelta(hours=23)).date()
 
 
@@ -43,6 +47,11 @@ def last_final_day(retrieved_at: datetime) -> date:
 class TiingoResponse:
     raw: bytes = field(repr=False)
     retrieved_at: datetime
+
+    def __post_init__(self):
+        if not isinstance(self.raw, bytes):
+            raise ValueError("Tiingo response body must be bytes")
+        last_final_day(self.retrieved_at)
 
 
 @dataclass(frozen=True)
@@ -58,13 +67,17 @@ class _Row:
 def _decimal(value):
     if isinstance(value, bool) or not isinstance(value, (int, Decimal)):
         raise ValueError("Expected a JSON number")
-    return number(value)
+    result = number(value)
+    if result and not -20 <= result.adjusted() <= 20:
+        raise ValueError("Number out of range")  # Huge exponents would also make exact arithmetic slow.
+    return result
 
 
 def _split_counts(factor):
     exact = Fraction(factor)
     counts = exact.limit_denominator(1000)
-    if counts <= 0 or abs(exact / counts - 1) > Fraction(1, 100000):
+    if (counts <= 0 or counts == 1 or counts.numerator > 1000
+            or abs(exact / counts - 1) > Fraction(1, 100000)):
         raise ValueError("Split factor is not a ratio of whole share counts")
     return counts.numerator, counts.denominator
 
@@ -80,6 +93,7 @@ def price_rows(raw, ticker, retrieved_at, start=None, end=None):
     final = last_final_day(retrieved_at)
     parsed = []
     for index, row in enumerate(rows, 1):
+        day = None
         try:
             if not isinstance(row, dict) or not _FIELDS <= set(row):
                 raise ValueError
@@ -96,10 +110,12 @@ def price_rows(raw, ticker, retrieved_at, start=None, end=None):
                 raise ValueError
             split = None if factor == 1 else _split_counts(factor)
         except (ValueError, TypeError, ArithmeticError):
-            raise ValueError(f"Invalid Tiingo price row {index} for {ticker}") from None
+            dated = f" ({day})" if day is not None else ""
+            raise ValueError(f"Invalid Tiingo price row {index}{dated} for {ticker}") from None
         if day > final:
-            raise ValueError(f"Tiingo bar {day} for {ticker} may be a partial session: it was retrieved before "
-                             "18:00 New York time that day. Request an end date before today.")
+            raise ValueError(f"Tiingo bar {day} for {ticker} may be a partial session: it was retrieved before 23:00 UTC "
+                             "(18:00 New York standard time, 19:00 daylight time) that day. "
+                             "Request an end date before today.")
         if (start is not None and day < start) or (end is not None and day > end):
             raise ValueError(f"Tiingo bar {day} for {ticker} lies outside the requested dates")
         parsed.append(_Row(day, bar, adjusted, dividend, factor, split))
@@ -124,7 +140,7 @@ def metadata_exchange(raw, ticker):
 def _crosscheck(ticker, rows, actions):
     observations = tuple((row.day, row.bar.close, row.adjusted_close) for row in rows)
     try:
-        found = provider_adjustment_disagreements(observations, actions)
+        found = provider_adjustment_disagreements(observations, actions, ADJUSTMENT_TOLERANCE, "ex_date_close")
     except ArithmeticError:
         raise ValueError(f"Tiingo adjClose for {ticker} could not be compared numerically") from None
     mismatches = [f for f in found if f.reason == "factor_mismatch"]
@@ -153,6 +169,8 @@ class TiingoJsonSource:
         responses = tuple(self.prices.values()) + tuple(self.metadata.values())
         if any(not isinstance(r, TiingoResponse) for r in responses):
             raise ValueError("Tiingo source requires TiingoResponse values")
+        for ticker in self.prices:
+            check_ticker(ticker)
         if self.calendar_ticker not in self.prices:
             raise ValueError(f"Calendar ticker {self.calendar_ticker} must be among the downloaded tickers")
         bars, actions, securities, dates = [], [], [], {}
@@ -161,7 +179,6 @@ class TiingoJsonSource:
                        f"Trading calendar is the {self.calendar_ticker} trading days in the Tiingo response; "
                        "no exchange calendar is consulted."]
         for ticker in sorted(self.prices):
-            check_ticker(ticker)
             exchange = metadata_exchange(self.metadata[ticker].raw, ticker)
             rows = price_rows(self.prices[ticker].raw, ticker, self.prices[ticker].retrieved_at)
             reported = []
@@ -185,9 +202,13 @@ class TiingoJsonSource:
         calendar = set(sessions)
         for ticker, days in sorted(dates.items()):
             outside = sorted(days - calendar)
+            if outside and outside[-1] > sessions[-1]:
+                raise ValueError(f"Tiingo bar {outside[-1]} for {ticker} is after the last {self.calendar_ticker} "
+                                 f"session in the download; download {self.calendar_ticker} through the same date")
             if outside:
                 raise ValueError(f"Tiingo bar {outside[0]} for {ticker} is not a {self.calendar_ticker} trading day")
-        metadata = DataMetadata("tiingo", max(r.retrieved_at for r in responses), self.universe_policy, True,
+        retrieved_at = max(r.retrieved_at for r in responses).astimezone(timezone.utc)
+        metadata = DataMetadata("tiingo", retrieved_at, self.universe_policy, True,
                                 f"{self.calendar_ticker.lower()}_trading_days_tiingo", "raw",
                                 tuple(dict.fromkeys(limitations)), tuple(hashes))
         return Snapshot(sessions, tuple(bars), metadata, tuple(securities), tuple(actions))

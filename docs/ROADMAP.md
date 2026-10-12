@@ -74,6 +74,8 @@ removed research docs, scripts and tests).
   histories, before step H.
 - Confirm with Tiingo, before publishing reference numbers or shipping the ML
   model, that derived results (returns, drawdowns) and model weights trained on
-  the data are not treated as data redistribution.
+  the data are not treated as data redistribution; also ask when each day's
+  bar, `divCash` and `adjClose` are final (the importer assumes 18:00 New York
+  time).
 - Run the SMA200 forward-journal capture after the 2026-10-30 close (see
   [the forward journal](FORWARD_SHADOW.md)).

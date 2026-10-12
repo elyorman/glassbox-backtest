@@ -72,15 +72,16 @@ class AdjustmentDisagreement:
     reason: str  # "factor_mismatch" or "insufficient_precision".
 
 
-def provider_adjustment_disagreements(observations, actions, tolerance="0.001"):
+def provider_adjustment_disagreements(observations, actions, tolerance="0.001", dividend_basis="previous_close"):
     """Compare a provider's back-adjusted closes with declared splits and cash dividends.
 
     `observations` are ascending (session, raw_close, provider_adjusted_close) for one
     security. A back-adjusted series is raw * A(t), so A(previous) / A(current) equals
-    the product of the price factors of actions in (previous, current]. Declared actions
-    give that product as the action-adjusted previous close divided by the previous
-    close (split: old/new shares; cash dividend: (reference - amount) / reference, the
-    convention providers such as EODHD document).
+    the product of the price factors of actions in (previous, current]. Splits give
+    old/new shares. A cash dividend's factor depends on the provider's convention:
+    "previous_close" is (previous close - amount) / previous close, as EODHD documents;
+    "ex_date_close" is ex-date close / (ex-date close + amount), which reproduces
+    Tiingo's adjClose to about 1e-11.
 
     The provider's rounding is half a unit of the finest decimal printed anywhere in the
     series (providers drop trailing zeros), allowed on top of `tolerance`. A pair whose
@@ -89,6 +90,8 @@ def provider_adjustment_disagreements(observations, actions, tolerance="0.001"):
     tolerance = number(tolerance)
     if tolerance < 0:
         raise ValueError("Adjustment tolerance cannot be negative")
+    if dividend_basis not in ("previous_close", "ex_date_close"):
+        raise ValueError("Unsupported dividend basis")
     rows = tuple((day, number(raw), number(adjusted)) for day, raw, adjusted in observations)
     if any(a[0] >= b[0] for a, b in zip(rows, rows[1:])):
         raise ValueError("Adjustment observations require ascending unique sessions")
@@ -101,12 +104,16 @@ def provider_adjustment_disagreements(observations, actions, tolerance="0.001"):
     found = []
     with localcontext(Context(prec=28, rounding=ROUND_HALF_EVEN)):
         for (day0, raw0, adjusted0), (day1, raw1, adjusted1) in zip(rows, rows[1:]):
-            reference = raw0
+            reference, dividends = raw0, Decimal(1)
             for action in price_actions:
                 if day0 < action.session <= day1:
-                    reference = (action.adjust_price(reference) if isinstance(action, Split)
-                                 else reference - action.amount)
-            expected = reference / raw0
+                    if isinstance(action, Split):
+                        reference = action.adjust_price(reference)
+                    elif dividend_basis == "previous_close":
+                        reference = reference - action.amount
+                    else:
+                        dividends *= raw1 / (raw1 + action.amount)
+            expected = reference / raw0 * dividends
             implied = (adjusted0 / raw0) / (adjusted1 / raw1)
             allowance = half_unit / adjusted0 + half_unit / adjusted1
             if allowance > PRECISION_LIMIT:
