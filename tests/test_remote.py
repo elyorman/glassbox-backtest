@@ -146,6 +146,9 @@ class RequestCacheTests(unittest.TestCase):
             cache.store(REQUEST, b"[1]", datetime(2024, 1, 11, tzinfo=timezone.utc))
             cache.store(REQUEST, b"[2]", datetime(2024, 1, 12, tzinfo=timezone.utc))
             self.assertEqual(cache.load(REQUEST), (b"[1]", AT))
+            next(Path(directory).glob("*.request.json")).write_text("{}")
+            with self.assertRaisesRegex(ValueError, "Demo cache integrity or schema"):
+                cache.store(REQUEST, b"[1]", AT)
 
     def test_concurrent_publication_needs_identical_bytes(self):
         with TemporaryDirectory() as directory:

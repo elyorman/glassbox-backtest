@@ -78,16 +78,21 @@ def _decimal(value):
     if isinstance(value, bool) or not isinstance(value, (int, Decimal)):
         raise ValueError("Expected a JSON number")
     result = number(value)
-    if result and not -20 <= result.adjusted() <= 20:
-        raise ValueError("Number out of range")  # Huge exponents would also make exact arithmetic slow.
+    # Tiingo prints at most about 17 digits; huge exponents or digit counts would make exact arithmetic slow.
+    if len(result.as_tuple().digits) > 30 or (result and not -20 <= result.adjusted() <= 20):
+        raise ValueError("Number out of range")
     return result
 
 
 def _split_counts(factor):
     exact = Fraction(factor)
-    counts = exact.limit_denominator(1000)
-    if (counts <= 0 or counts == 1 or counts.numerator > 1000
-            or abs(exact / counts - 1) > Fraction(1, 100000)):
+    if max(exact.numerator, exact.denominator) <= 1000:
+        counts = exact  # Already a ratio of whole share counts.
+    else:
+        counts = exact.limit_denominator(100)  # Float noise snaps only to a ratio of small counts.
+        if max(counts.numerator, counts.denominator) > 100 or abs(exact / counts - 1) > Fraction(1, 100000):
+            raise ValueError("Split factor is not a ratio of whole share counts")
+    if counts <= 0 or counts == 1:
         raise ValueError("Split factor is not a ratio of whole share counts")
     return counts.numerator, counts.denominator
 
@@ -234,7 +239,7 @@ class TiingoClient:
 
     A price response is cached, and its request never sent again, once it holds the
     end date's bar or the end date is at least FINAL_MARGIN_DAYS before the last final
-    session; metadata is always cached. Use a new cache directory to retrieve revised
+    day; metadata is always cached. Use a new cache directory to retrieve revised
     data. Every validated response body is kept under its SHA-256.
     """
     api_token: str = field(repr=False)

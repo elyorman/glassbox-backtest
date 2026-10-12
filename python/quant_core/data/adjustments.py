@@ -81,7 +81,8 @@ def provider_adjustment_disagreements(observations, actions, tolerance="0.001", 
     old/new shares. A cash dividend's factor depends on the provider's convention:
     "previous_close" is (previous close - amount) / previous close, as EODHD documents;
     "ex_date_close" is ex-date close / (ex-date close + amount), which reproduces
-    Tiingo's adjClose to about 1e-11.
+    Tiingo's adjClose to about 1e-11. It uses the later close of each pair, so it is
+    exact only when the dividend falls on that session; Tiingo's dividends always do.
 
     The provider's rounding is half a unit of the finest decimal printed anywhere in the
     series (providers drop trailing zeros), allowed on top of `tolerance`. A pair whose

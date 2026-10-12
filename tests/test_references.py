@@ -19,13 +19,13 @@ RATES = CashRateSeries("test_source", "test_3m", META.retrieved_at,
 
 
 def snapshot(skip=None):
-    # R splits 2-for-1 on DAYS[2], so its price halves from 20 to 10; X, never readable, pays a dividend.
+    # R splits 2-for-1 on DAYS[2] (20 to 10); X, never readable, pays a dividend and splits on DAYS[3] (30 to 15).
+    closes = {"A": ("10",) * 5, "R": ("20", "20", "10", "10", "10"), "X": ("30", "30", "30", "15", "15")}
     bars = tuple(Bar(asset, day, price, price, price, price, "1000")
-                 for asset, price0, price2 in (("A", "10", "10"), ("R", "20", "10"), ("X", "30", "30"))
-                 for day, price in zip(DAYS, (price0, price0, price2, price2, price2))
+                 for asset, series in closes.items() for day, price in zip(DAYS, series)
                  if (asset, day) != skip)
     actions = (Dividend("R", DAYS[1], "1", DAYS[1]), Split("R", DAYS[2], new_shares=2, old_shares=1),
-               Dividend("X", DAYS[1], "1", DAYS[1]))
+               Dividend("X", DAYS[1], "1", DAYS[1]), Split("X", DAYS[3], new_shares=2, old_shares=1))
     return Snapshot(DAYS, bars, META, SECURITIES, actions)
 
 
@@ -65,6 +65,7 @@ class ReferenceTests(unittest.TestCase):
         self.assertEqual(seen[DAYS[0]], ())
         self.assertEqual(seen[DAYS[1]], (("Dividend", "R"),))
         self.assertEqual(seen[DAYS[2]], (("Split", "R"), ("Dividend", "R")))
+        self.assertEqual(seen[DAYS[4]], (("Split", "R"), ("Dividend", "R")))
 
     def test_securities_outside_universe_and_references_stay_unreadable(self):
         with self.assertRaisesRegex(ValueError, "trading universe or references"):

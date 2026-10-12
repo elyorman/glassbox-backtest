@@ -11,6 +11,7 @@ from datetime import date
 from decimal import Decimal, localcontext
 
 from quant_core.analytics import CONTEXT, ZERO
+from quant_core.portfolio import reconciles
 
 STOP_KINDS = ("stop_gap", "stop_intraday")
 
@@ -111,7 +112,6 @@ def round_trips(result) -> tuple[TradeRecord, ...]:
         for asset, holding in holdings.items():
             records.append(holding.record("open", None, None, None, positions[asset].unrealized_pnl, final.session))
         explained = sum((r.total_pnl for r in records), ZERO) + final.interest_income
-        if abs(explained - (final.equity - result.summary.initial_cash)) > max(Decimal("1e-18"),
-                                                                              abs(final.equity) * Decimal("1e-24")):
+        if not reconciles(explained, final.equity - result.summary.initial_cash, final.equity):
             raise ArithmeticError("Trades and interest do not reconcile to the run's P&L")
     return tuple(sorted(records, key=lambda record: record.trade_id))

@@ -116,6 +116,7 @@ class InterestTests(unittest.TestCase):
         self.assertEqual([m.kind for m in zero.cash_movements], ["initial_capital"])
         negative = run(WEEK, rates((date(2023, 12, 29), "-0.0365")), cash="1000")
         self.assertEqual(negative.equity[1].cash, D("999.9"))
+        self.assertIsNone(summarize_run(negative)["sortino"])  # Negative returns, yet no zero-reference ratio.
 
     def test_without_rates_cash_earns_nothing(self):
         result = run(WEEK, None)

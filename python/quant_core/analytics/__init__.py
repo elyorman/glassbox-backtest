@@ -3,6 +3,7 @@
 from decimal import Context, Decimal, ROUND_HALF_EVEN, localcontext
 
 from quant_core.data import number
+from quant_core.portfolio import reconciles
 
 ZERO, ONE = Decimal(0), Decimal(1)
 CONTEXT = Context(prec=28, rounding=ROUND_HALF_EVEN)
@@ -110,7 +111,8 @@ def summarize_run(result):
         for position in result.equity[-1].positions:
             contributions[position.security_id] += position.market_value
         interest = result.equity[-1].interest_income
-        if abs(sum(contributions.values(), ZERO) + interest - (result.summary.final_equity - result.summary.initial_cash)) > max(Decimal("1e-18"), abs(result.summary.final_equity) * Decimal("1e-24")):
+        if not reconciles(sum(contributions.values(), ZERO) + interest,
+                          result.summary.final_equity - result.summary.initial_cash, result.summary.final_equity):
             raise ArithmeticError("Asset contributions and interest do not reconcile")
         calendar_days = (result.equity[-1].session - result.equity[0].session).days + 1
         cagr = (result.summary.final_equity / result.summary.initial_cash) ** (Decimal("365.2425") / calendar_days) - 1

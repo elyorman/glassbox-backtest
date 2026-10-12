@@ -128,7 +128,8 @@ class TiingoSourceTests(unittest.TestCase):
         cases = [row(D1, "100", day_text="2024-01-02"), row(D1, '"100"'), row(D1, "100", volume="true"),
                  row(D1, "100", volume="10.5"), row(D1, "100", div="-1"), row(D1, "100", split="1.0001234567"),
                  row(D1, "100", split="1.000001"), row(D1, "100", split="2.7182818"),
-                 row(D1, "100", split="1e+2000000"), row(D1, "1e+999"),
+                 row(D1, "100", split="1e+2000000"), row(D1, "1e+999"), row(D1, "100", split="0.367879"),
+                 row(D1, "100", split="3.000000000000000000000000000000000000001"),
                  row(D1, "100", adjusted="0"), row(D1, "100").replace('"close"', '"x"'),
                  row(D1, "100").replace('"low":100', '"low":101'),
                  row(D1, '"SECRET-1"'), row(D1, "100").replace('"open":100', '"open":100,"open":100')]

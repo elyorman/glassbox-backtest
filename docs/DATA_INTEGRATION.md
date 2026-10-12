@@ -20,7 +20,7 @@ Users supply their own Tiingo key; the free tier allows 50 requests an hour,
   retries. The key travels only in the `Authorization` header and never appears
   in URLs, cache files, manifests or error messages. A validated price response
   is cached, and its request never sent again, once it contains the end date's
-  bar or the end date is at least seven days before the last final session;
+  bar or the end date is at least seven days before the latest final day;
   otherwise the request is sent again next time. Metadata is always cached.
   Every validated response body is kept under its SHA-256; revised data needs a
   new cache directory. Errors say what to do: key rejected (HTTP 401/403),
@@ -59,9 +59,10 @@ There is no download command yet; it is roadmap step E.
 
 `quant_core.data.treasury` reads the U.S. Treasury Daily Par Yield Curve, one
 public CSV per year (1990 onward). `TreasuryClient(cache_dir).year(year)`
-downloads a year. A completed year (from 8 January of the next year) is cached
-only if it covers early January to late December, and is then frozen: a later
-Treasury correction needs a new cache directory. The current year is downloaded
+downloads a year. A completed year (from 8 January of the next year) must cover
+early January to late December, or the download is refused and nothing is
+cached; once cached it is frozen, and a later Treasury correction needs a new
+cache directory. The current year is downloaded
 each time. `parse_year` reads the "3 Mo" column by name (the
 column set changes between years), converts percent to a fraction and skips
 blank cells (holidays and a few missing days). `cash_rate_series(responses)`

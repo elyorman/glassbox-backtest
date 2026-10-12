@@ -100,6 +100,8 @@ class ClientTests(unittest.TestCase):
             self.download(client, 2026, Y2026)
             _, calls = self.download(client, 2026, Y2026)
             self.assertEqual(len(calls), 1)
+            self.assertIn("daily-treasury-rates.csv/2026/all?", calls[0][0][0].full_url)
+            self.assertIn("&field_tdr_date_value=2026&", calls[0][0][0].full_url)
             self.assertEqual(len(list(Path(directory).glob("*.csv"))), 1)
             self.assertEqual(list(Path(directory).glob("*.request.json")), [])
             # Early January: the previous year may still receive its last rows.

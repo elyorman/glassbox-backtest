@@ -7,6 +7,11 @@ from decimal import Decimal
 ZERO = Decimal(0)
 
 
+def reconciles(left: Decimal, right: Decimal, scale: Decimal) -> bool:
+    """Equal within the tolerance Decimal rounding on partial basis disposal needs, relative to `scale`."""
+    return abs(left - right) <= max(Decimal("1e-18"), abs(scale) * Decimal("1e-24"))
+
+
 @dataclass
 class Position:
     quantity: Decimal
@@ -87,7 +92,6 @@ class PortfolioLedger:
         equity = self.cash + receivables + sum((v.market_value for v in values), ZERO)
         reconciled = (self.initial_cash + self.realized_pnl + self.dividend_income + self.interest_income
                       + sum((v.unrealized_pnl for v in values), ZERO))
-        # Relative tolerance accommodates decimal rounding on partial basis disposal.
-        if abs(equity - reconciled) > max(Decimal("1e-18"), abs(equity) * Decimal("1e-24")):
+        if not reconciles(equity, reconciled, equity):
             raise ArithmeticError("Cash + positions + receivables does not reconcile to P&L")
         return equity

@@ -16,7 +16,7 @@ from quant_core.backtest.sources import OrderBatch, OrderSchedule, OrderSource, 
 from quant_core.data import CashDelisting, Dividend, Snapshot, Split, require_raw_volume
 from quant_core.data.quality import check_quality
 from quant_core.execution import OrderRequest
-from quant_core.portfolio import PortfolioLedger, Receivable, ZERO
+from quant_core.portfolio import PortfolioLedger, Receivable, ZERO, reconciles
 from quant_core.provenance import content_hash
 from quant_core.risk import RiskBook, RiskDecision, assess_buy, portfolio_breaches, portfolio_heat, reserve_buy
 from quant_core.sizing import EntryIntent, normalized_history, size_entry, wilder_atr
@@ -164,7 +164,7 @@ class _Simulation:
 
     def _cash(self, day, kind, asset, amount, order_id=None):
         self.audit_cash += amount
-        if abs(self.audit_cash - self.ledger.cash) > max(Decimal("1e-18"), abs(self.ledger.cash) * Decimal("1e-24")):
+        if not reconciles(self.audit_cash, self.ledger.cash, self.ledger.cash):
             raise ArithmeticError("Cash movement ledger does not reconcile")
         self.cash_movements.append(CashMovement(len(self.cash_movements) + 1, day, kind, asset,
                                                 amount, self.ledger.cash, order_id))
