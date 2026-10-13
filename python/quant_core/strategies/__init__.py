@@ -85,6 +85,35 @@ class StrategyConfig:
         return max(required, self.volume_lookback)
 
 
+def rebalance_order(equity, target_fraction, price, held, average_volume, max_participation, execution):
+    """Whole-share order toward a capital budget at the signal close: (action, requested, target, reasons).
+
+    A zero fraction exits fully. Buys are floored to whole shares and capped at
+    `max_participation` of past average volume; fractional holdings can be sold.
+    A selected security whose budget buys no share is a skip, never a hold of zero.
+    """
+    selected = target_fraction > 0
+    target = allocation_shares(equity, target_fraction, price, execution) if selected else ZERO
+    delta = target - held
+    action, requested, reasons = "skip", ZERO, []
+    if delta < 0:
+        action, requested = "sell", -delta
+    elif delta > 0:
+        volume_limit = floor_shares(average_volume * max_participation)
+        whole_delta = floor_shares(delta)
+        if whole_delta < delta:
+            reasons.append("whole_share_buy_rounding")
+        requested = min(whole_delta, volume_limit)
+        if requested < whole_delta:
+            reasons.append("entry_participation_cap")
+        action = "buy" if requested else "skip"
+    elif target > 0:
+        action = "hold"
+    if selected and action == "skip":
+        reasons.append("below_one_share")
+    return action, requested, target, tuple(reasons)
+
+
 def rebalance_dates(calendar, frequency):
     """Predeclared exchange sessions, including next-period evidence; no price access."""
     calendar = tuple(calendar)
@@ -290,27 +319,13 @@ class RuleStrategy:
                 elif selected:
                     action = "hold"
             else:
-                price = features[asset].get("raw_close")
-                target = allocation_shares(context.equity, target_fraction, price, self.execution) if selected else ZERO
-                delta = target - quantity
-                if delta < 0:
-                    action, requested = "sell", -delta
-                elif delta > 0:
-                    volume_limit = floor_shares(features[asset]["average_volume"] * cfg.max_volume_participation)
-                    whole_delta = floor_shares(delta)
-                    if whole_delta < delta:
-                        reason.append("whole_share_buy_rounding")
-                    requested = min(whole_delta, volume_limit)
-                    if requested < whole_delta:
-                        reason.append("entry_participation_cap")
-                    action = "buy" if requested else "skip"
-                elif selected:
-                    action = "hold"
+                action, requested, target, extra = rebalance_order(
+                    context.equity, target_fraction, features[asset].get("raw_close"), quantity,
+                    features[asset].get("average_volume"), cfg.max_volume_participation, self.execution)
+                reason.extend(extra)
             if action in ("buy", "sell"):
                 requests.append(OrderRequest(asset, action, requested, priority,
                                              f"{cfg.name}:rebalance_{action}"))
-            if selected and action == "skip":
-                reason.append("below_one_share")
             decisions.append(SignalDecision(
                 context.as_of, asset, cfg.name, eligible, qualifies, selected, scores.get(asset),
                 ranks.get(asset), target_fraction if cfg.profile == "scheduled_slots" else None,
