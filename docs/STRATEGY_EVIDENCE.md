@@ -81,7 +81,7 @@ carries a regression test.
 | Registration | Section 3 fields, including the cumulative trial count. |
 | Results | Net of costs at 10, 25 and 50 bps per side: CAGR, volatility, Sharpe, Sortino, maximum drawdown, Calmar, longest underwater period, exposure, turnover, trade count, whole-share and opening-gap rejections. Formulas as in [the validation contract](VALIDATION.md), except the reference rate (Cash row). |
 | Uncertainty | Stationary-bootstrap 95% intervals for CAGR, Sharpe, maximum drawdown and benchmark-relative Sharpe, with registered block lengths, repetitions and seed. Deflated Sharpe ratio (Section 4). |
-| Periods | Effective start after signal warmup; calendar years; predeclared windows 2016–2019, 2020–2022, 2023–2026; best and worst 12 months; five largest drawdowns with recovery time. |
+| Periods | Effective start after signal warmup; calendar years; predeclared windows 2016–2019, 2020–2022, 2023–2026; since the first public version of the plan's primary rule source (date verified and recorded in the registration); best and worst 12 months; five largest drawdowns with recovery time. |
 | Sensitivity | Parameter neighbours, rebalance-day shift (±2 sessions), second-open delay, cost ladder. Reported only; never used to select. |
 | References | The registered primary reference, plus SPY buy-and-hold, 60/40 SPY/IEF and equal weight of the universe for every built-in, and T-bill cash. |
 | Cash | Idle cash earns the lagged 3-month T-bill yield, and Sharpe and Sortino use excess returns over that same series. A secondary variant reports 0% cash against a 0% reference rate. |
