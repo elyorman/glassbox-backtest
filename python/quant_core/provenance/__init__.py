@@ -6,6 +6,7 @@ from decimal import Decimal
 from hashlib import sha256
 import json
 from collections.abc import Mapping
+from pathlib import Path
 
 
 def primitive(value):
@@ -28,3 +29,10 @@ def canonical_json(value) -> str:
 
 def content_hash(value) -> str:
     return sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def code_hash() -> str:
+    """SHA-256 over every quant_core source file; run manifests record it as the engine hash."""
+    root = Path(__file__).resolve().parents[1]
+    return content_hash(tuple((path.relative_to(root).as_posix(), path.read_text(encoding="utf-8"))
+                              for path in sorted(root.rglob("*.py"))))

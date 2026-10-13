@@ -2,9 +2,14 @@
 
 from datetime import date, datetime, timezone
 from decimal import Context, Decimal, localcontext
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
 from quant_core.data.rates import CashRateSeries
+from quant_core.data.storage import load_cash_rates, save_cash_rates
+from quant_core.provenance import content_hash
 
 AT = datetime(2024, 1, 10, tzinfo=timezone.utc)
 
@@ -61,6 +66,39 @@ class CashRateSeriesTests(unittest.TestCase):
             rates.growth((date(2024, 1, 15), date(2024, 1, 16)))
         with self.assertRaisesRegex(ValueError, "later session"):
             rates.growth((date(2024, 1, 4), date(2024, 1, 3)))
+
+
+class SavedRatesTests(unittest.TestCase):
+    RATES = series((date(2024, 1, 3), "0.0525"), (date(2024, 1, 4), "0.053"))
+
+    def test_saved_rates_round_trip_with_their_hash(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "rates.json"
+            save_cash_rates(self.RATES, path)
+            self.assertEqual(load_cash_rates(path), self.RATES)
+            envelope = json.loads(path.read_text())
+            self.assertEqual(envelope["rates_hash"], content_hash(self.RATES))
+            with self.assertRaises(FileExistsError):
+                save_cash_rates(self.RATES, path)  # A saved series is never replaced.
+
+    def test_tampered_or_noncanonical_files_are_refused(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "rates.json"
+            save_cash_rates(self.RATES, path)
+            text = path.read_text()
+            path.write_text(text.replace('"0.053"', '"0.054"'))
+            with self.assertRaisesRegex(ValueError, "integrity hash mismatch"):
+                load_cash_rates(path)
+            envelope = json.loads(text)
+            envelope["rates"]["observations"][1][1] = "5.3E-2"  # Same number, another spelling.
+            envelope["rates_hash"] = content_hash(envelope["rates"])
+            path.write_text(json.dumps(envelope))
+            with self.assertRaisesRegex(ValueError, "canonical"):
+                load_cash_rates(path)
+            for broken in ({"rates": {}}, {**envelope, "schema_version": 2}, {**envelope, "extra": 1}):
+                path.write_text(json.dumps(broken))
+                with self.subTest(broken=sorted(broken)), self.assertRaises(ValueError):
+                    load_cash_rates(path)
 
 
 if __name__ == "__main__":

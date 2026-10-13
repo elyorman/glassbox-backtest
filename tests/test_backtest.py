@@ -14,6 +14,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+import quant_core
 from quant_core.backtest import OrderSchedule, RunConfig, ScheduledOrder, SourceSpec, run_backtest
 from quant_core.backtest.cli import main
 from quant_core.backtest.sources import load_schedule
@@ -21,7 +22,7 @@ from quant_core.data import Bar, CashDelisting, DataMetadata, Dividend, Security
 from quant_core.data.csv_source import CsvSource
 from quant_core.data.storage import save_snapshot
 from quant_core.execution import ExecutionProfile, OrderRequest
-from quant_core.provenance import content_hash, primitive
+from quant_core.provenance import code_hash, content_hash, primitive
 from quant_core.reporting import save_run, verify_run
 
 DAYS = (date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4), date(2024, 1, 5))
@@ -618,7 +619,11 @@ class GoldenAndReportingTests(unittest.TestCase):
         _, result, _ = self.golden()
         with self.assertRaises(FrozenInstanceError):
             result.summary.final_equity = Decimal(0)
-        self.assertEqual(len(result.manifest.engine_hash), 64)
+        self.assertEqual(result.manifest.engine_hash, code_hash())
+        root = Path(quant_core.__file__).parent  # Every source file, as run manifests have always hashed them.
+        self.assertEqual(code_hash(), content_hash(tuple((path.relative_to(root).as_posix(),
+                                                          path.read_text(encoding="utf-8"))
+                                                         for path in sorted(root.rglob("*.py")))))
         self.assertEqual(result.manifest.data.adjustment_policy, "raw")
         self.assertEqual(result.manifest.config.execution.cash_policy, "economic_proceeds_reuse")
         self.assertTrue(result.manifest.assumptions)

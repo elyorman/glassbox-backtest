@@ -3,7 +3,6 @@
 from collections import defaultdict
 from dataclasses import replace
 from decimal import Context, Decimal, ROUND_HALF_EVEN, localcontext
-from pathlib import Path
 import sys
 from types import MappingProxyType
 
@@ -18,15 +17,13 @@ from quant_core.data.quality import check_quality
 from quant_core.data.rates import MAX_RATE_AGE_DAYS
 from quant_core.execution import OrderRequest
 from quant_core.portfolio import PortfolioLedger, Receivable, ZERO, reconciles
-from quant_core.provenance import content_hash
+from quant_core.provenance import code_hash, content_hash
 from quant_core.risk import RiskBook, RiskDecision, assess_buy, portfolio_breaches, portfolio_heat, reserve_buy
 from quant_core.sizing import EntryIntent, normalized_history, size_entry, wilder_atr
 
 
 def _engine_hash():
-    root = Path(__file__).resolve().parents[1]
-    return content_hash(tuple((path.relative_to(root).as_posix(), path.read_text(encoding="utf-8"))
-                              for path in sorted(root.rglob("*.py"))))
+    return code_hash()
 
 
 def run_backtest(snapshot: Snapshot, source: OrderSource, config: RunConfig | None = None) -> BacktestResult:

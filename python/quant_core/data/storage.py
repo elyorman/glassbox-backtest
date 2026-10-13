@@ -9,19 +9,18 @@ from tempfile import NamedTemporaryFile
 from quant_core.data import (
     Bar, CashDelisting, DataMetadata, Dividend, Security, Snapshot, Split, snapshot_payload,
 )
-from quant_core.provenance import canonical_json, content_hash
+from quant_core.data.rates import CashRateSeries
+from quant_core.provenance import canonical_json, content_hash, primitive
 
 
-def save_snapshot(snapshot: Snapshot, path: Path) -> None:
-    payload = snapshot_payload(snapshot)
-    serialized = canonical_json({"dataset_hash": content_hash(payload), "snapshot": payload}) + "\n"
+def _publish(path: Path, serialized: str, prefix: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Publish a fully written file without replacing an existing dataset version.
     # A same-directory hard link is atomic and refuses an existing destination.
     temporary = None
     try:
         with NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
-                                dir=path.parent, prefix=".snapshot-", suffix=".tmp", delete=False) as stream:
+                                dir=path.parent, prefix=prefix, suffix=".tmp", delete=False) as stream:
             temporary = Path(stream.name)
             stream.write(serialized)
             stream.flush()
@@ -30,6 +29,38 @@ def save_snapshot(snapshot: Snapshot, path: Path) -> None:
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def save_snapshot(snapshot: Snapshot, path: Path) -> None:
+    payload = snapshot_payload(snapshot)
+    _publish(path, canonical_json({"dataset_hash": content_hash(payload), "snapshot": payload}) + "\n", ".snapshot-")
+
+
+def save_cash_rates(series: CashRateSeries, path: Path) -> None:
+    """Publish a cash-rate series once, with the hash that identifies it."""
+    payload = primitive(series)
+    _publish(path, canonical_json({"schema_version": 1, "rates_hash": content_hash(payload), "rates": payload}) + "\n",
+             ".rates-")
+
+
+def load_cash_rates(path: Path) -> CashRateSeries:
+    try:
+        envelope = json.loads(path.read_text(encoding="utf-8"))
+        if (set(envelope) != {"schema_version", "rates_hash", "rates"} or type(envelope["schema_version"]) is not int
+                or envelope["schema_version"] != 1):
+            raise ValueError("Unexpected cash rate file fields")
+        payload = envelope["rates"]
+        if content_hash(payload) != envelope["rates_hash"]:
+            raise ValueError("Cash rate integrity hash mismatch")
+        if set(payload) != {"source", "series", "retrieved_at", "observations"}:
+            raise ValueError("Unexpected cash rate fields")
+        series = CashRateSeries(payload["source"], payload["series"], datetime.fromisoformat(payload["retrieved_at"]),
+                                tuple((date.fromisoformat(day), rate) for day, rate in payload["observations"]))
+        if content_hash(series) != envelope["rates_hash"]:
+            raise ValueError("Cash rate file is not in canonical normalized form")
+        return series
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"Malformed cash rate file: {exc}") from exc
 
 
 def load_snapshot(path: Path) -> Snapshot:
