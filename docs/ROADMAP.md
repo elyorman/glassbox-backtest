@@ -61,7 +61,8 @@ removed research docs, scripts and tests).
   always the rule and the number that triggered it, never an opinion.
 - Monthly over daily: more frequent decisions multiply costs and trade on
   noise; the backtester lets a user see that for themselves.
-- Tiingo over Alpaca for V1: history to 2003 (2008 is in every backtest),
+- Tiingo over Alpaca for V1: history from each ETF's launch (1993 for SPY,
+  1998 for the sector funds, 2001–2006 for the rest; 2008 is in every backtest),
   raw and adjusted prices in one response for the corporate-action
   cross-check, and documented licence terms that cover bring-your-own-key
   software. Alpaca stays as internal development data.
