@@ -155,8 +155,9 @@ Deflated Sharpe inputs, stated in every pack and computed per parent:
     trials committed, and recorded in the ledger header before the first
     registration under this standard. It is not recomputed afterwards.
 - **T, skewness, kurtosis:** the number of daily returns in the primary
-  period and the sample skewness and kurtosis of the strategy's daily excess
-  returns.
+  period and the skewness and raw kurtosis (3 for normal returns) of the
+  strategy's daily excess returns, from population central moments as
+  `return_moments` computes them.
 
 ## 5. Data and disclosure
 

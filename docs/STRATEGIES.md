@@ -13,7 +13,9 @@ them were built for the 2026-10 studies.
 plan decides on month-end sessions from total-return signal values (the index
 under "Causal feature and calendar contract", sampled on decision sessions),
 trades at the next open and invests 95% of equity. A skipped ETF's weight stays
-in cash unless its rule says otherwise.
+in cash unless its rule says otherwise. Before its first full decision (table
+below) a plan trades whichever ETFs already pass the checks, so registered runs
+start at the first full decision.
 
 | Plan | ETFs | Rule | Sources | First full decision |
 | --- | --- | --- | --- | --- |
@@ -31,7 +33,8 @@ Grinblatt's six-month hold.
 - **Decision sessions.** `decision_sessions(calendar, offset)`: the last
   session of each completed month in the bound calendar, moved by −2 to +2
   sessions for the rebalance-day sensitivity. "10 months" means the current
-  decision and the nine before it.
+  decision and the nine before it. `MonthlyPlan.evaluate` works on decision
+  sessions only.
 - **T-bills.** Dual momentum and inverse volatility bind their own
   `CashRateSeries` and compound it as the engine credits idle cash, so their
   decisions are the same whether the run's idle cash earns the Treasury rate or
@@ -169,6 +172,9 @@ capped by past average-volume participation. Negative deltas sell, including
 split-created fractions. Selected retained positions can be trimmed/topped up;
 fractional buy remainders stay unfilled and receive the auditable
 `whole_share_buy_rounding` reason. A buy delta below one share emits no order.
+A selected security whose budget buys no share and that is not held is
+recorded as `skip` with `below_one_share` (before 0.7.0 the record said `hold`
+with a zero target; orders and fills are unchanged).
 Unselected holdings exit fully. Sells execute before buys, permitting reuse of
 actual opening proceeds. No future proceeds or prices are used to determine
 quantities. Opening gaps can still reject buys; targets are not automatically
@@ -271,7 +277,7 @@ cost scenarios, failure reporting and an untouched final period.
 
 ## Verification and limits
 
-The full suite passes 190 tests on Linux/Python 3.12.7. It covers exact endpoints,
+The strategy tests run on Linux/Python 3.12.7. They cover exact endpoints,
 dividend/split units, future-action/index prefix invariance, ties, negative
 momentum, condition/eligibility separation, calendar boundaries, warmup,
 independent initial/rotating/rebalanced portfolios, cost-aware benchmarks,
