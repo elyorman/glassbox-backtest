@@ -1,8 +1,9 @@
 """Developer data-import entry point; the desktop workflow will wrap this API."""
 
 import argparse
-from datetime import datetime
+from datetime import date, datetime, timezone
 from hashlib import sha256
+import os
 from pathlib import Path
 import sys
 
@@ -18,6 +19,50 @@ def load_local_snapshot(path):
         from quant_core.data.parquet import load_parquet_snapshot
         return load_parquet_snapshot(path)
     return load_snapshot(path)
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def plan_tickers():
+    """Every ticker the built-in plans trade; SPY and IEF also serve the 60/40 reference."""
+    from quant_core.strategies.plans import builtin_plans
+    return tuple(sorted({asset for plan in builtin_plans() for asset in plan.universe}))
+
+
+def _tiingo_key(env_file):
+    """TIINGO_API_KEY from the environment, else from the env file; never printed."""
+    key = os.environ.get("TIINGO_API_KEY")
+    if not key and env_file.is_file():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            name, separator, value = line.strip().partition("=")
+            if separator and name.removeprefix("export ").strip() == "TIINGO_API_KEY":
+                key = value.strip().strip("'\"")
+    if not key:
+        raise ValueError(f"Set TIINGO_API_KEY in the environment or in {env_file}")
+    return key
+
+
+def _download(args):
+    from quant_core.data.dataset import DownloadIncomplete, download_dataset, save_dataset
+    from quant_core.data.remote import RequestBudget
+    from quant_core.data.tiingo import TiingoClient, last_final_day
+    from quant_core.data.treasury import TreasuryClient
+    if args.output.exists():
+        raise ValueError(f"Dataset directory {args.output} already exists; datasets are never overwritten")
+    tiingo = TiingoClient(_tiingo_key(args.env_file), args.tiingo_cache, budget=RequestBudget(args.max_requests))
+    end = args.end or last_final_day(_now())
+    try:
+        dataset = download_dataset(args.tickers or plan_tickers(), end, tiingo, TreasuryClient(args.treasury_cache))
+    except DownloadIncomplete as exc:
+        print(f"Download incomplete: {exc}", file=sys.stderr)
+        return 3
+    save_dataset(args.output, dataset)
+    manifest = dataset.manifest
+    print(canonical_json({key: manifest[key] for key in
+                          ("dataset_id", "end", "snapshot", "securities", "rates", "quality_warnings")}))
+    return 0
 
 
 def _pairs(values):
@@ -69,8 +114,19 @@ def main(argv=None) -> int:
     inspector = commands.add_parser("inspect")
     inspector.add_argument("snapshot", type=Path)
     inspector.add_argument("--strict-discontinuities", action="store_true")
+    downloader = commands.add_parser("download-tiingo",
+                                     help="Download, check and freeze the built-in plans' ETFs and T-bill rates")
+    downloader.add_argument("--output", type=Path, required=True)
+    downloader.add_argument("--tickers", nargs="+", help="Default: every ticker the built-in plans trade")
+    downloader.add_argument("--end", type=date.fromisoformat, help="Default: the latest final day")
+    downloader.add_argument("--tiingo-cache", type=Path, default=Path("local/cache/tiingo"))
+    downloader.add_argument("--treasury-cache", type=Path, default=Path("local/cache/treasury"))
+    downloader.add_argument("--max-requests", type=int, default=45, help="Tiingo requests sent per run")
+    downloader.add_argument("--env-file", type=Path, default=Path(".env"))
     args = parser.parse_args(argv)
     try:
+        if args.command == "download-tiingo":
+            return _download(args)
         if args.command == "import-csv":
             metadata = DataMetadata(args.source, datetime.fromisoformat(args.retrieved_at),
                                     args.universe_policy, args.actions_complete, args.calendar_name,

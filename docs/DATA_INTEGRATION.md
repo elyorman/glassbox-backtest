@@ -53,7 +53,8 @@ Users supply their own Tiingo key; the free tier allows 50 requests an hour,
   `adjVolume`). Tiingo's adjusted closes follow its dividend formula to about
   1e-11.
 
-There is no download command yet; it is roadmap step E.
+The `download-tiingo` command saves a frozen dataset from these pieces; see
+"Frozen research datasets" below.
 
 ## Treasury cash rates
 
@@ -70,6 +71,43 @@ combines years into the `CashRateSeries` that `RunConfig.cash_rates` takes; see
 [the backtester](BACKTESTER.md). From 2003 to 2026 the latest observation before
 any SPY session was at most 4 days old; the engine refuses one older than 10
 days.
+
+## Frozen research datasets
+
+`quant_core.data.dataset` downloads, checks and freezes the data the built-in
+plans need; registered studies cite it by its ID.
+
+```bash
+PYTHONPATH=python .venv/bin/python -m quant_core.cli download-tiingo \
+  --output local/data/tester-etfs-2026-10-12
+```
+
+- **Contents.** By default the 18 tickers the four built-in plans trade
+  (`plan_tickers()`, read from `builtin_plans()`): Tiingo metadata, then
+  prices from each ticker's `startDate` to the end date (`--end`, default the
+  latest final day); and the Treasury 3-month series for every year from 1990,
+  trimmed to the end date. `--tickers` replaces the list and must include SPY,
+  whose trading days are the calendar.
+- **Key.** `TIINGO_API_KEY` from the environment, else from `--env-file`
+  (default `.env`). It never appears in output, files or errors.
+- **Request budget.** At most `--max-requests` (default 45) Tiingo requests
+  are sent per run; cached responses cost nothing. When the budget is spent
+  the command exits with code 3 and names the tickers still missing. Finished
+  requests stay cached (`--tiingo-cache`, default `local/cache/tiingo`;
+  Treasury years in `--treasury-cache`), so running the same command later
+  continues.
+- **Checks.** The Tiingo normalization and adjusted-close cross-check above;
+  a data-quality error refuses the dataset and warnings are counted.
+- **Files.** A new directory (an existing one is refused) holding
+  `snapshot.json`, `rates.json` (the cash-rate series with its hash) and
+  `manifest.json`, written last: program version and source code hash,
+  tickers, each request's dates, SHA-256 and retrieval time, each Treasury
+  year, the snapshot and rate hashes and ranges, warning counts, and
+  `dataset_id`, a hash over the manifest. `load_dataset(directory)` checks the
+  three files against each other.
+- **Output.** A JSON summary: dataset ID, end date, sessions, each ticker's
+  first and last session and bar count, the rate range and the warnings. Exit
+  codes: 0 saved, 2 refused (key, data, existing directory), 3 incomplete.
 
 ## EODHD price semantics
 

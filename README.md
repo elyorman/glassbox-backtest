@@ -17,7 +17,7 @@ non-trader can use it in ten minutes.**
 
 | Area | State |
 | --- | --- |
-| Market data | Tiingo download and import (the tester release's provider), Treasury 3-month cash rates, CSV/JSON/Parquet snapshots, EODHD import, provider adjustment cross-checks, data-quality checks, dated index membership. |
+| Market data | Tiingo download and import (the tester release's provider), frozen research datasets with Treasury 3-month cash rates, CSV/JSON/Parquet snapshots, EODHD import, provider adjustment cross-checks, data-quality checks, dated index membership. |
 | Backtester | Next-open fills, shared cash, costs, idle-cash interest, splits/dividends/delistings, stops, read-only reference series, entry-to-exit trade records, full audit bundles. |
 | Risk and sizing | Position, cash, exposure, liquidity and drawdown limits; fixed, fractional and ATR sizing; every refusal recorded. |
 | Strategies | The four rule-based V1 plans (multi-asset trend, dual momentum, US sector rotation, inverse volatility) with hand-checked tests, not yet run on real data; six research rule families. The ML plan: not built yet. |

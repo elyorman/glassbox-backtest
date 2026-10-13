@@ -1,20 +1,22 @@
 """Frozen datasets: a budgeted download, quality checks, saving once and verified reloading."""
 
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from hashlib import sha256
-from io import BytesIO
+from io import BytesIO, StringIO
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from quant_core.cli import main, plan_tickers
 from quant_core.data.dataset import DownloadIncomplete, download_dataset, load_dataset, save_dataset
 from quant_core.data.rates import CashRateSeries
 from quant_core.data.remote import RequestBudget
 from quant_core.data.storage import save_cash_rates, save_snapshot
 from quant_core.data.tiingo import TiingoClient, TiingoResponse, metadata_start
-from quant_core.data.treasury import FIRST_YEAR, TreasuryResponse
+from quant_core.data.treasury import FIRST_YEAR, TreasuryClient, TreasuryResponse
 from quant_core.provenance import code_hash, content_hash
 from test_tiingo import AT, D1, D2, D3, row
 
@@ -165,6 +167,74 @@ class DatasetTests(unittest.TestCase):
             raw = json.dumps({"ticker": "SPY", "exchangeCode": "NYSE ARCA", "startDate": start}).encode()
             with self.subTest(start=start), self.assertRaisesRegex(ValueError, "SPY lacks a valid start date"):
                 metadata_start(raw, "SPY")
+
+
+def command(*args, key=None):
+    """Run the CLI with the given TIINGO_API_KEY environment value (None: unset); returns (code, out, err)."""
+    out, err = StringIO(), StringIO()
+    with patch.dict(os.environ), patch.object(TreasuryClient, "year", lambda self, year: FakeTreasury().year(year)):
+        os.environ.pop("TIINGO_API_KEY", None)
+        if key is not None:
+            os.environ["TIINGO_API_KEY"] = key
+        with redirect_stdout(out), redirect_stderr(err):
+            code = main(list(args))
+    return code, out.getvalue(), err.getvalue()
+
+
+class DownloadCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = TemporaryDirectory()
+        self.root = Path(self.directory.name)
+        (self.root / ".env").write_text("OTHER=1\nexport TIINGO_API_KEY='SECRET-1'\n")
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def download(self, *extra, key=None, urls=URLS):
+        with tiingo_server(urls) as sent:
+            code, out, err = command("download-tiingo", "--output", str(self.root / "dataset"), "--tickers", "SPY",
+                                     "GLD", "--env-file", str(self.root / ".env"), "--tiingo-cache",
+                                     str(self.root / "tiingo"), "--treasury-cache", str(self.root / "treasury"),
+                                     *extra, key=key)
+        return code, out, err, sent
+
+    def test_the_command_saves_a_dataset_and_never_shows_the_key(self):
+        code, out, err, sent = self.download("--end", "2024-01-04")
+        self.assertEqual((code, err), (0, ""))
+        summary = json.loads(out)
+        self.assertEqual(summary["dataset_id"], load_dataset(self.root / "dataset").manifest["dataset_id"])
+        self.assertEqual(summary["securities"]["GLD"]["first_session"], "2024-01-03")
+        self.assertEqual({r.get_header("Authorization") for r in sent}, {"Token SECRET-1"})  # From the env file.
+        for path in self.root.rglob("*"):
+            if path.is_file() and path.name != ".env":
+                self.assertNotIn(b"SECRET", path.read_bytes(), path)
+        self.assertNotIn("SECRET", out + err)
+
+    def test_the_environment_key_and_the_latest_final_day_are_the_defaults(self):
+        urls = {url.replace("endDate=2024-01-04", "endDate=2024-01-10"): raw for url, raw in URLS.items()}
+        with patch("quant_core.cli._now", return_value=AT):  # The latest final day at AT is 2024-01-10.
+            code, out, err, sent = self.download(key="SECRET-2", urls=urls)
+        self.assertEqual((code, json.loads(out)["end"]), (0, "2024-01-10"))
+        self.assertEqual({r.get_header("Authorization") for r in sent}, {"Token SECRET-2"})
+
+    def test_exit_codes_explain_what_to_do(self):
+        code, out, err, sent = self.download("--end", "2024-01-04", "--max-requests", "1")
+        self.assertEqual((code, out), (3, ""))
+        self.assertIn("Download incomplete: 2 ticker(s) still to download: GLD, SPY", err)
+        self.assertFalse((self.root / "dataset").exists())
+        (self.root / "dataset").mkdir()
+        code, _, err, sent = self.download("--end", "2024-01-04")
+        self.assertEqual((code, sent), (2, []))
+        self.assertIn("already exists; datasets are never overwritten", err)
+        (self.root / "dataset").rmdir()
+        (self.root / ".env").write_text("OTHER=1\n")
+        code, _, err, sent = self.download("--end", "2024-01-04")
+        self.assertEqual((code, sent), (2, []))
+        self.assertIn("Set TIINGO_API_KEY in the environment or in", err)
+
+    def test_default_tickers_are_every_ticker_the_built_in_plans_trade(self):
+        self.assertEqual(plan_tickers(), ("AGG", "EFA", "GSG", "IEF", "LQD", "SPY", "VNQ", "XLB", "XLC", "XLE",
+                                          "XLF", "XLI", "XLK", "XLP", "XLRE", "XLU", "XLV", "XLY"))
 
 
 if __name__ == "__main__":

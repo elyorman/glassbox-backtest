@@ -34,7 +34,7 @@ EODHD/CSV adapters, licensing and storefront, in-app or paper trading.
 | --- | --- | --- |
 | C | Engine prerequisites: Tiingo adapter; idle cash earns Treasury 3-month yield; read-only reference series; entry-to-exit trade records ([design](superpowers/specs/2026-10-11-engine-prerequisites-design.md)) | done (version 0.6.0) |
 | D | The four rule plans with hand-checked tests; deflated Sharpe ratio ([design](superpowers/specs/2026-10-12-rule-plans-design.md)) | done (version 0.7.0) |
-| E | ETF data download; historical V[SR] floor; registered runs of the four plans; evidence-pack report | |
+| E | ETF data download; historical V[SR] floor; registered runs of the four plans; evidence-pack report. E1 frozen dataset ([design](superpowers/specs/2026-10-13-etf-dataset-design.md)), E2 evidence machinery, E3 registered studies | in progress (E1 done) |
 | F | ML-ranked rotation: frozen ~60-ETF list (owner approves before training); features and labels; Ridge then LightGBM, walk-forward; comparison with the plain rule; fifth evidence pack; versioned shipped model | |
 | G | "This month" order sheet, day-one sheet, mark as done | |
 | H | Rewind: deposits and withdrawals in the engine; trade-history import (template, then testers' brokers); replay with cash flows; honest comparison report | |
