@@ -3,7 +3,7 @@
 from bisect import bisect_left
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Context, Decimal, ROUND_HALF_EVEN, localcontext
 
 from quant_core.data import number, session
 
@@ -51,3 +51,12 @@ class CashRateSeries:
         if day <= previous:
             raise ValueError("Accrual requires a later session")
         return amount * self.rate_before(previous) * (day - previous).days / 365
+
+    def growth(self, sessions) -> Decimal:
+        """Growth of 1 unit of idle cash held over consecutive `sessions`, credited as the engine credits it."""
+        sessions = tuple(sessions)
+        growth = Decimal(1)
+        with localcontext(Context(prec=28, rounding=ROUND_HALF_EVEN)):  # The engine's context, whoever calls.
+            for previous, day in zip(sessions, sessions[1:]):
+                growth += self.accrual(growth, previous, day)
+        return growth

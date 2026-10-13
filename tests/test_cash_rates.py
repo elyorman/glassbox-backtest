@@ -48,6 +48,18 @@ class CashRateSeriesTests(unittest.TestCase):
                 CashRateSeries(source, name, at, (good,))
         self.assertEqual(series((date(2024, 1, 3), 1)).observations, ((date(2024, 1, 3), Decimal(1)),))
 
+    def test_growth_compounds_each_session_in_the_engine_context(self):
+        rates = series((date(2024, 1, 2), "0.365"))
+        sessions = (date(2024, 1, 3), date(2024, 1, 4), date(2024, 1, 8))
+        with localcontext(Context(prec=3)):  # The caller's context must not round the result.
+            # One day earns 0.365 / 365 = 0.001; then 1.001 earns 0.001 a day for four days.
+            self.assertEqual(rates.growth(sessions), Decimal("1.005004"))
+        self.assertEqual(rates.growth(sessions[:1]), Decimal(1))
+        with self.assertRaisesRegex(ValueError, "stale for 2024-01-15"):
+            rates.growth((date(2024, 1, 15), date(2024, 1, 16)))
+        with self.assertRaisesRegex(ValueError, "later session"):
+            rates.growth((date(2024, 1, 4), date(2024, 1, 3)))
+
 
 if __name__ == "__main__":
     unittest.main()
