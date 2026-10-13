@@ -10,7 +10,7 @@ from urllib.error import HTTPError, URLError
 
 from quant_core.data import Dividend, Security, Split, require_raw_volume
 from quant_core.data.quality import check_quality
-from quant_core.data.remote import RequestCache
+from quant_core.data.remote import RequestBudget, RequestBudgetExhausted, RequestCache
 from quant_core.data.tiingo import NO_PAYMENT_DATES, TiingoClient, TiingoJsonSource, TiingoResponse
 
 AT = datetime(2024, 1, 10, 23, 30, tzinfo=timezone.utc)
@@ -211,6 +211,22 @@ class TiingoClientTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "partial session"):
                 self.call(TiingoClient("SECRET-1", Path(directory)), "prices", "SPY", D1, D3, raw=three)
             self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_only_requests_actually_sent_spend_the_budget(self):
+        with TemporaryDirectory() as directory:
+            budget = RequestBudget(1)
+            client = TiingoClient("SECRET-1", Path(directory), budget=budget)
+            first, _ = self.call(client, "prices", "SPY", D1, D3)
+            self.assertEqual(budget.used, 1)
+            self.assertEqual(self.call(client, "prices", "SPY", D1, D3), (first, []))  # Cached: free.
+            with self.assertRaisesRegex(RequestBudgetExhausted, "Tiingo request budget of 1 is spent"):
+                _, calls = self.call(client, "metadata", "SPY")
+            with patch("quant_core.data.remote.build_opener", side_effect=AssertionError("sent")):
+                with self.assertRaises(RequestBudgetExhausted):
+                    client.metadata("SPY")
+            self.assertEqual(budget.used, 1)
+        with self.assertRaisesRegex(ValueError, "RequestBudget"):
+            TiingoClient("SECRET-1", Path("unused"), budget=1)
 
     def test_cached_responses_are_validated_again(self):
         with TemporaryDirectory() as directory:

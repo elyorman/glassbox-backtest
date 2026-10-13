@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 
 from quant_core.data import Bar, DataMetadata, Dividend, Security, Snapshot, Split, number
 from quant_core.data.adjustments import provider_adjustment_disagreements
-from quant_core.data.remote import RequestCache, fetch, publish_bytes, unique_object
+from quant_core.data.remote import RequestBudget, RequestCache, fetch, publish_bytes, unique_object
 
 BASE_URL = "https://api.tiingo.com/tiingo/daily/"
 ERRORS = {401: "Tiingo rejected the API key (HTTP 401); check the key",
@@ -243,17 +243,21 @@ class TiingoClient:
     A price response is cached, and its request never sent again, once it holds the
     end date's bar or the end date is at least FINAL_MARGIN_DAYS before the last final
     day; metadata is always cached. Use a new cache directory to retrieve revised
-    data. Every validated response body is kept under its SHA-256.
+    data. Every validated response body is kept under its SHA-256. An optional
+    budget is spent once for each request actually sent.
     """
     api_token: str = field(repr=False)
     cache_dir: Path
     timeout: int = 30
+    budget: RequestBudget | None = field(default=None, compare=False)
 
     def __post_init__(self):
         if not isinstance(self.api_token, str) or re.fullmatch(r"[!-~]+", self.api_token) is None:
             raise ValueError("Tiingo API key must be supplied explicitly as printable ASCII without spaces")
         if type(self.timeout) is not int or self.timeout <= 0:
             raise ValueError("Tiingo timeout must be a positive number of seconds")
+        if self.budget is not None and not isinstance(self.budget, RequestBudget):
+            raise ValueError("Tiingo request budget must be a RequestBudget")
         object.__setattr__(self, "cache_dir", Path(self.cache_dir))
 
     def prices(self, ticker: str, start: date, end: date) -> TiingoResponse:
@@ -278,6 +282,8 @@ class TiingoClient:
         if cached is not None:
             validate(*cached)
             return TiingoResponse(*cached)
+        if self.budget is not None:
+            self.budget.spend("Tiingo")
         raw = fetch(url, {"Accept": "application/json", "Authorization": "Token " + self.api_token,
                           "User-Agent": "quant-platform-core"}, self.timeout, "Tiingo", ERRORS)
         retrieved_at = _now()

@@ -87,6 +87,25 @@ def publish_bytes(raw: bytes, destination: Path, label: str) -> None:
                 pass  # A leftover temporary file never affects the published one.
 
 
+class RequestBudgetExhausted(ValueError):
+    """Raised instead of sending a request the budget does not cover; nothing is sent."""
+
+
+class RequestBudget:
+    """Counts requests actually sent; cached responses never spend it."""
+
+    def __init__(self, limit: int):
+        if type(limit) is not int or limit < 0:
+            raise ValueError("Request budget limit must be a nonnegative integer")
+        self.limit, self.used = limit, 0
+
+    def spend(self, label: str) -> None:
+        if self.used >= self.limit:
+            raise RequestBudgetExhausted(f"{label} request budget of {self.limit} is spent; finished requests are "
+                                         "cached, so run again later to continue")
+        self.used += 1
+
+
 class RequestCache:
     """Request manifests and content-addressed response bodies in one directory."""
 

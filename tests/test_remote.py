@@ -14,7 +14,9 @@ import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
-from quant_core.data.remote import RequestCache, fetch, publish_bytes, unique_object
+from quant_core.data.remote import (
+    RequestBudget, RequestBudgetExhausted, RequestCache, fetch, publish_bytes, unique_object,
+)
 from quant_core.provenance import canonical_json, content_hash
 
 AT = datetime(2024, 1, 10, 23, 30, tzinfo=timezone.utc)
@@ -174,6 +176,24 @@ class RequestCacheTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "Cannot persist Demo cache"):
                     publish_bytes(b"x", Path(directory) / "x.json", "Demo")
             self.assertEqual(list(Path(directory).iterdir()), [])
+
+
+class RequestBudgetTests(unittest.TestCase):
+    def test_a_budget_allows_exactly_its_limit(self):
+        budget = RequestBudget(2)
+        budget.spend("Demo")
+        budget.spend("Demo")
+        self.assertEqual(budget.used, 2)
+        with self.assertRaisesRegex(RequestBudgetExhausted, "Demo request budget of 2 is spent; finished requests "
+                                                             "are cached, so run again later to continue"):
+            budget.spend("Demo")
+        self.assertEqual(budget.used, 2)
+        self.assertTrue(issubclass(RequestBudgetExhausted, ValueError))
+        with self.assertRaises(RequestBudgetExhausted):
+            RequestBudget(0).spend("Demo")
+        for limit in (-1, 1.0, True, None):
+            with self.subTest(limit=limit), self.assertRaisesRegex(ValueError, "nonnegative integer"):
+                RequestBudget(limit)
 
 
 if __name__ == "__main__":
