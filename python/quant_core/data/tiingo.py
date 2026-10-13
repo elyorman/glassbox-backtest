@@ -152,6 +152,18 @@ def metadata_exchange(raw, ticker):
     return value["exchangeCode"].strip()
 
 
+def metadata_start(raw, ticker):
+    """The first trading day named in a Tiingo metadata response for `ticker`."""
+    metadata_exchange(raw, ticker)
+    start = json.loads(raw).get("startDate")
+    try:
+        if not isinstance(start, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}", start) is None:
+            raise ValueError
+        return date.fromisoformat(start)
+    except ValueError:
+        raise ValueError(f"Tiingo metadata for {ticker} lacks a valid start date") from None
+
+
 def _crosscheck(ticker, rows, actions):
     observations = tuple((row.day, row.bar.close, row.adjusted_close) for row in rows)
     try:
