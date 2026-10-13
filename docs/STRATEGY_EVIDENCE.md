@@ -161,11 +161,18 @@ Deflated Sharpe inputs, stated in every pack and computed per parent:
 
 ## 5. Data and disclosure
 
-- Alpaca daily data is used for building and researching built-ins.
-  Confirming Alpaca's terms for commercial research use is an open action item.
+- Tiingo daily data is used for building, researching and registering the
+  tester-release built-ins (owner decision 2026-10-11; see
+  [the roadmap](ROADMAP.md)): raw prices with dividends and splits, checked
+  against Tiingo's adjusted closes at import. Alpaca daily data stays internal
+  development data; confirming Alpaca's terms for commercial research use is
+  an open action item.
 - Before publishing reference numbers, the project owner decides whether an
-  independent-provider cross-check (target: Tiingo business plan) is feasible;
-  the pack records the decision and its reason, and any cross-check result.
+  independent-provider cross-check is feasible, and with which provider
+  (Tiingo's own adjusted closes are not independent); the pack records the
+  decision and its reason, and any cross-check result. Tiingo must also confirm
+  that published derived results are not data redistribution (an open item in
+  the roadmap).
 - All inspected history is listed in the ledger by panel and period. Forward
   journals and future sessions supply fresh evidence; previously inspected
   history is disclosed, never relabelled as untouched.
