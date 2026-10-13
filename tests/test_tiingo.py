@@ -220,13 +220,27 @@ class TiingoClientTests(unittest.TestCase):
             self.assertEqual(budget.used, 1)
             self.assertEqual(self.call(client, "prices", "SPY", D1, D3), (first, []))  # Cached: free.
             with self.assertRaisesRegex(RequestBudgetExhausted, "Tiingo request budget of 1 is spent"):
-                _, calls = self.call(client, "metadata", "SPY")
+                self.call(client, "metadata", "SPY")
             with patch("quant_core.data.remote.build_opener", side_effect=AssertionError("sent")):
                 with self.assertRaises(RequestBudgetExhausted):
                     client.metadata("SPY")
             self.assertEqual(budget.used, 1)
         with self.assertRaisesRegex(ValueError, "RequestBudget"):
             TiingoClient("SECRET-1", Path("unused"), budget=1)
+
+    def test_failed_and_unfinished_requests_spend_the_budget_too(self):
+        url = "https://api.tiingo.com/tiingo/daily/SPY/prices"
+        with TemporaryDirectory() as directory:
+            budget = RequestBudget(3)
+            client = TiingoClient("SECRET-1", Path(directory), budget=budget)
+            with self.assertRaisesRegex(ValueError, "HTTP 500"):
+                self.call(client, "prices", "SPY", D1, D3, error=HTTPError(url, 500, "x", {}, BytesIO(b"")))
+            with self.assertRaisesRegex(ValueError, "metadata for SPY"):
+                self.call(client, "metadata", "SPY")  # A price array is not metadata: sent, then refused.
+            self.call(client, "prices", "SPY", D1, date(2999, 1, 1))  # Not final: sent, so spent.
+            self.assertEqual(budget.used, 3)
+            with self.assertRaises(RequestBudgetExhausted):
+                self.call(client, "prices", "SPY", D1, date(2999, 1, 1))  # Never cached, so never free.
 
     def test_cached_responses_are_validated_again(self):
         with TemporaryDirectory() as directory:

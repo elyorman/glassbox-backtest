@@ -35,4 +35,4 @@ def code_hash() -> str:
     """SHA-256 over every quant_core source file; run manifests record it as the engine hash."""
     root = Path(__file__).resolve().parents[1]
     return content_hash(tuple((path.relative_to(root).as_posix(), path.read_text(encoding="utf-8"))
-                              for path in sorted(root.rglob("*.py"))))
+                              for path in sorted(root.rglob("*.py"), key=lambda path: path.relative_to(root).parts)))

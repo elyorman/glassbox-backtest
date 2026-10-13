@@ -25,8 +25,8 @@ class CashRateSeries:
             raise ValueError("Cash rate retrieved_at must be timezone-aware")
         try:
             observations = tuple((day, number(rate)) for day, rate in self.observations)
-        except (TypeError, ValueError):
-            raise ValueError("Cash rate observations must be (date, rate) pairs") from None
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Cash rate observations must be (date, rate) pairs: {exc}") from None
         for day, _ in observations:
             session(day)
         if not observations or any(a[0] >= b[0] for a, b in zip(observations, observations[1:])):

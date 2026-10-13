@@ -32,13 +32,21 @@ def plan_tickers():
 
 
 def _tiingo_key(env_file):
-    """TIINGO_API_KEY from the environment, else from the env file; never printed."""
+    """TIINGO_API_KEY from the environment, else the last entry in the env file; never printed."""
     key = os.environ.get("TIINGO_API_KEY")
     if not key and env_file.is_file():
-        for line in env_file.read_text(encoding="utf-8").splitlines():
+        try:
+            lines = env_file.read_text(encoding="utf-8-sig").splitlines()  # A byte-order mark is allowed.
+        except UnicodeDecodeError:
+            raise ValueError(f"Cannot read {env_file}; save it as UTF-8 text") from None
+        for line in lines:
             name, separator, value = line.strip().partition("=")
             if separator and name.removeprefix("export ").strip() == "TIINGO_API_KEY":
-                key = value.strip().strip("'\"")
+                value = value.strip()
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+                    key = value[1:-1]
+                else:
+                    key = value.split(" #", 1)[0].strip()  # An unquoted value may end with a comment.
     if not key:
         raise ValueError(f"Set TIINGO_API_KEY in the environment or in {env_file}")
     return key
@@ -51,17 +59,22 @@ def _download(args):
     from quant_core.data.treasury import TreasuryClient
     if args.output.exists():
         raise ValueError(f"Dataset directory {args.output} already exists; datasets are never overwritten")
+    final = last_final_day(_now())
+    if args.end is not None and args.end > final:
+        raise ValueError(f"--end must be on or before {final}, the latest day whose Tiingo data is final")
+    end = args.end or final
     tiingo = TiingoClient(_tiingo_key(args.env_file), args.tiingo_cache, budget=RequestBudget(args.max_requests))
-    end = args.end or last_final_day(_now())
     try:
         dataset = download_dataset(args.tickers or plan_tickers(), end, tiingo, TreasuryClient(args.treasury_cache))
     except DownloadIncomplete as exc:
-        print(f"Download incomplete: {exc}", file=sys.stderr)
+        # The default end moves daily; the same end date makes a later run reuse the cached requests.
+        print(f"Download incomplete: {exc} Resume with --end {end.isoformat()}.", file=sys.stderr)
         return 3
     save_dataset(args.output, dataset)
     manifest = dataset.manifest
     print(canonical_json({key: manifest[key] for key in
-                          ("dataset_id", "end", "snapshot", "securities", "rates", "quality_warnings")}))
+                          ("dataset_id", "requested_end", "end", "snapshot", "securities", "rates",
+                           "quality_warnings")}))
     return 0
 
 

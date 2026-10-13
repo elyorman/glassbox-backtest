@@ -621,9 +621,11 @@ class GoldenAndReportingTests(unittest.TestCase):
             result.summary.final_equity = Decimal(0)
         self.assertEqual(result.manifest.engine_hash, code_hash())
         root = Path(quant_core.__file__).parent  # Every source file, as run manifests have always hashed them.
+        paths = sorted(root.rglob("*.py"))  # Linux order; code_hash sorts by parts so Windows agrees.
         self.assertEqual(code_hash(), content_hash(tuple((path.relative_to(root).as_posix(),
-                                                          path.read_text(encoding="utf-8"))
-                                                         for path in sorted(root.rglob("*.py")))))
+                                                          path.read_text(encoding="utf-8")) for path in paths)))
+        self.assertEqual([p.relative_to(root).parts for p in paths],
+                         sorted(p.relative_to(root).parts for p in paths))
         self.assertEqual(result.manifest.data.adjustment_policy, "raw")
         self.assertEqual(result.manifest.config.execution.cash_policy, "economic_proceeds_reuse")
         self.assertTrue(result.manifest.assumptions)

@@ -83,31 +83,45 @@ PYTHONPATH=python .venv/bin/python -m quant_core.cli download-tiingo \
 ```
 
 - **Contents.** By default the 18 tickers the four built-in plans trade
-  (`plan_tickers()`, read from `builtin_plans()`): Tiingo metadata, then
-  prices from each ticker's `startDate` to the end date (`--end`, default the
-  latest final day); and the Treasury 3-month series for every year from 1990,
-  trimmed to the end date. `--tickers` replaces the list and must include SPY,
-  whose trading days are the calendar.
-- **Key.** `TIINGO_API_KEY` from the environment, else from `--env-file`
-  (default `.env`). It never appears in output, files or errors.
+  (`plan_tickers()`, read from `builtin_plans()`). The Treasury 3-month
+  series comes first, every year from 1990 (it needs no key, so a Treasury
+  failure costs no Tiingo requests). Then SPY: metadata, then prices from its
+  `startDate` to the end date (`--end`, default the latest final day; a later
+  date is refused before anything is sent). Every other ticker's prices run
+  from its `startDate` to SPY's last session, so each request ends on a
+  trading day and is cached as final even when the end date is a weekend or
+  holiday. The manifest records both `requested_end` and the effective `end`;
+  rates are trimmed to `end`. `--tickers` replaces the list and must include
+  SPY, whose trading days are the calendar.
+- **Key.** `TIINGO_API_KEY` from the environment, else the last
+  `TIINGO_API_KEY=` line of `--env-file` (default `.env`), read as UTF-8 (a
+  byte-order mark is fine); `export`, quotes and a trailing ` # comment` are
+  understood. The key never appears in output, files or errors.
 - **Request budget.** At most `--max-requests` (default 45) Tiingo requests
   are sent per run; cached responses cost nothing. When the budget is spent
-  the command exits with code 3 and names the tickers still missing. Finished
-  requests stay cached (`--tiingo-cache`, default `local/cache/tiingo`;
-  Treasury years in `--treasury-cache`), so running the same command later
-  continues.
-- **Checks.** The Tiingo normalization and adjusted-close cross-check above;
-  a data-quality error refuses the dataset and warnings are counted.
-- **Files.** A new directory (an existing one is refused) holding
+  the command exits with code 3, names the tickers still missing and the end
+  date to pass with `--end` when running again, so the next run asks for the
+  same, cached, requests. Caches live in `--tiingo-cache` (default
+  `local/cache/tiingo`) and `--treasury-cache`; paths are relative to the
+  current directory, normally the repository root.
+- **Checks.** The Tiingo normalization and adjusted-close cross-check above.
+  A data-quality error refuses the dataset, and so does a session without a
+  Treasury rate at most 10 days old (runs would refuse it later); warnings are
+  counted. Errors name the ticker they concern.
+- **Files.** A new directory (an existing one is refused; one left without
+  `manifest.json` by a failed save must be deleted first) holding
   `snapshot.json`, `rates.json` (the cash-rate series with its hash) and
   `manifest.json`, written last: program version and source code hash,
-  tickers, each request's dates, SHA-256 and retrieval time, each Treasury
-  year, the snapshot and rate hashes and ranges, warning counts, and
-  `dataset_id`, a hash over the manifest. `load_dataset(directory)` checks the
-  three files against each other.
-- **Output.** A JSON summary: dataset ID, end date, sessions, each ticker's
-  first and last session and bar count, the rate range and the warnings. Exit
-  codes: 0 saved, 2 refused (key, data, existing directory), 3 incomplete.
+  tickers, both end dates, each request's dates, SHA-256 and retrieval time,
+  each Treasury year, the snapshot and rate hashes and ranges, warning counts,
+  and `dataset_id`, a hash over the manifest. `save_dataset` and
+  `load_dataset(directory)` check the three against each other. The raw
+  responses stay in the caches under the recorded SHA-256s; keep
+  `local/cache` to audit a registered study's data.
+- **Output.** A JSON summary: dataset ID, both end dates, sessions, each
+  ticker's first and last session and bar count, the rate range and the
+  warnings. Exit codes: 0 saved; 2 refused (key, end date, data, network or
+  rate limit, existing directory); 3 incomplete, run again.
 
 ## EODHD price semantics
 

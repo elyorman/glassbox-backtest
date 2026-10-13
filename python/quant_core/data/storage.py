@@ -38,6 +38,8 @@ def save_snapshot(snapshot: Snapshot, path: Path) -> None:
 
 def save_cash_rates(series: CashRateSeries, path: Path) -> None:
     """Publish a cash-rate series once, with the hash that identifies it."""
+    if not isinstance(series, CashRateSeries):
+        raise ValueError("Only a CashRateSeries can be saved as a cash rate file")
     payload = primitive(series)
     _publish(path, canonical_json({"schema_version": 1, "rates_hash": content_hash(payload), "rates": payload}) + "\n",
              ".rates-")
@@ -54,13 +56,19 @@ def load_cash_rates(path: Path) -> CashRateSeries:
             raise ValueError("Cash rate integrity hash mismatch")
         if set(payload) != {"source", "series", "retrieved_at", "observations"}:
             raise ValueError("Unexpected cash rate fields")
+        rows = payload["observations"]
+        if not isinstance(rows, list) or any(not isinstance(row, list) or len(row) != 2
+                                             or not all(isinstance(value, str) for value in row) for row in rows):
+            raise ValueError("Cash rate observations must be [date, rate] pairs of strings")
         series = CashRateSeries(payload["source"], payload["series"], datetime.fromisoformat(payload["retrieved_at"]),
                                 tuple((date.fromisoformat(day), rate) for day, rate in payload["observations"]))
         if content_hash(series) != envelope["rates_hash"]:
             raise ValueError("Cash rate file is not in canonical normalized form")
         return series
     except (KeyError, TypeError, AttributeError) as exc:
-        raise ValueError(f"Malformed cash rate file: {exc}") from exc
+        raise ValueError(f"Malformed cash rate file {path}: {exc}") from exc
+    except ValueError as exc:
+        raise ValueError(f"Cash rate file {path}: {exc}") from exc
 
 
 def load_snapshot(path: Path) -> Snapshot:

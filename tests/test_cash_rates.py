@@ -99,6 +99,24 @@ class SavedRatesTests(unittest.TestCase):
                 path.write_text(json.dumps(broken))
                 with self.subTest(broken=sorted(broken)), self.assertRaises(ValueError):
                     load_cash_rates(path)
+            good = json.loads(text)
+            for version in (True, 1.0, "1"):
+                path.write_text(json.dumps({**good, "schema_version": version}))
+                with self.subTest(version=version), self.assertRaisesRegex(ValueError, "Unexpected cash rate file"):
+                    load_cash_rates(path)
+            good["rates"]["observations"][0].append("extra")
+            good["rates_hash"] = content_hash(good["rates"])
+            path.write_text(json.dumps(good))
+            with self.assertRaisesRegex(ValueError, f"Cash rate file {path}: .*\\[date, rate\\] pairs of strings"):
+                load_cash_rates(path)
+        with self.assertRaisesRegex(ValueError, "not float"):
+            series((date(2024, 1, 3), 0.05))  # The underlying reason is kept.
+
+    def test_only_a_rate_series_can_be_saved(self):
+        with TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "Only a CashRateSeries"):
+                save_cash_rates({"source": "x"}, Path(directory) / "rates.json")
+            self.assertEqual(list(Path(directory).iterdir()), [])
 
 
 if __name__ == "__main__":
