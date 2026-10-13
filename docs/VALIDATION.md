@@ -38,11 +38,41 @@ finite-sample correction, rather than a Sharpe test or proof of future profit.
 [White](https://onlinelibrary.wiley.com/doi/10.1111/1468-0262.00152).
 
 The [Deflated Sharpe Ratio](https://www.davidhbailey.com/dhbpapers/deflated-sharpe.pdf)
-and [CSCV/PBO](https://www.davidhbailey.com/dhbpapers/backtest-prob.pdf) address
-additional selection questions. They remain separate research diagnostics to
+(below) and [CSCV/PBO](https://www.davidhbailey.com/dhbpapers/backtest-prob.pdf)
+address additional selection questions. CSCV/PBO remains a diagnostic to
 implement and qualify; this workflow does not relabel its block-bootstrap
 output as either one. Future ML comparisons also require leakage-safe fitting,
 not just resampling returns from models already trained on the whole history.
+
+## Deflated Sharpe ratio
+
+`quant_core.validation.statistics` implements Bailey and López de Prado
+(2014) for the evidence packs ([the evidence standard](STRATEGY_EVIDENCE.md),
+Section 4). With SR̂ the per-period Sharpe ratio of T returns, γ̂₃ their
+skewness, γ̂₄ their raw kurtosis (3 for normal returns), N trials and V the
+variance of the trials' per-period Sharpe ratios:
+
+```text
+SR0 = sqrt(V) × ((1 − γ) Φ⁻¹(1 − 1/N) + γ Φ⁻¹(1 − 1/(N·e)))      γ = 0.5772… (Euler–Mascheroni)
+DSR = Φ((SR̂ − SR0) × sqrt(T − 1) / sqrt(1 − γ̂₃·SR̂ + (γ̂₄ − 1)/4 · SR̂²))
+```
+
+- `return_moments(returns)`: SR̂ as mean over sample standard deviation;
+  skewness m₃/m₂^1.5 and kurtosis m₄/m₂² from population central moments.
+- `expected_maximum_sharpe(trials, sharpe_variance)`: SR0 (Eq. 1 with zero
+  mean, as the paper uses it for the null of no skill).
+- `deflated_sharpe_ratio(sharpe, observations, skewness, kurtosis, trials,
+  sharpe_variance)`: Eq. 2, a probability.
+- `deflated_sharpe(returns, trials, sharpe_variance)`: both, with every input
+  and intermediate value for the pack.
+
+Sharpe ratios and their variance are per period; annualized values give wrong
+answers. Inputs are refused when N < 2, V < 0, T < 2, the returns have zero
+variance, or the skewness and kurtosis leave a non-positive term under the
+square root. Moments are exact decimals; Φ and Φ⁻¹ use the standard library's
+`NormalDist` in binary floating point, so results agree across platforms far
+beyond the four decimals a pack shows. Tests reproduce the paper's example
+(SR0 ≈ 0.1132, DSR ≈ 0.9004).
 
 ## Frozen campaign and qualification contract
 

@@ -1,11 +1,14 @@
-"""Paired stationary resampling and a centered maximum-mean search diagnostic."""
+"""Paired stationary resampling, a centered maximum-mean search diagnostic and the deflated Sharpe ratio."""
 
 from decimal import Decimal, localcontext
+from math import e
 from random import Random
-from statistics import median
+from statistics import NormalDist, median
 
 from quant_core.analytics import CONTEXT, mean, paired_metrics
 from quant_core.data import number
+
+EULER_GAMMA = 0.5772156649015329  # Euler-Mascheroni constant, binary floating point like NormalDist.
 
 
 def stationary_indices(length, expected_block, random):
@@ -105,3 +108,59 @@ def fold_score_bootstrap(left, right, benchmark, fold_indices, block, repetition
                 differences.append(median(left_scores) - median(right_scores))
         return {"expected_block_sessions": block, "repetitions": repetitions, "seed": seed,
                 "median_fold_score_difference_95": _interval(differences), "defined_replicates": len(differences)}
+
+
+def return_moments(returns):
+    """Per-period Sharpe ratio (mean over sample deviation), count, skewness and raw kurtosis.
+
+    Skewness is m3 / m2^1.5 and kurtosis m4 / m2^2 from population central
+    moments, so normal returns give 0 and 3, as Bailey and Lopez de Prado use them.
+    """
+    values = tuple(map(number, returns))
+    if len(values) < 2:
+        raise ValueError("Return moments need at least two returns")
+    with localcontext(CONTEXT):
+        count, center = len(values), mean(values)
+        m2, m3, m4 = (sum(((v - center) ** power for v in values), Decimal(0)) / count for power in (2, 3, 4))
+        if m2 == 0:
+            raise ValueError("Returns with zero variance have no Sharpe ratio")
+        return {"observations": count, "sharpe": center / (m2 * count / (count - 1)).sqrt(),
+                "skewness": m3 / (m2 * m2.sqrt()), "kurtosis": m4 / (m2 * m2)}
+
+
+def expected_maximum_sharpe(trials, sharpe_variance):
+    """Bailey and Lopez de Prado (2014), Eq. 1 with zero mean: the expected best of `trials` unskilled Sharpe ratios."""
+    if type(trials) is not int or trials < 2:
+        raise ValueError("Trials must be an integer of at least 2")
+    variance = number(sharpe_variance)
+    if variance < 0:
+        raise ValueError("Sharpe variance cannot be negative")
+    normal = NormalDist()
+    z = ((1 - EULER_GAMMA) * normal.inv_cdf(1 - 1 / trials)
+         + EULER_GAMMA * normal.inv_cdf(1 - 1 / (trials * e)))
+    with localcontext(CONTEXT):
+        return variance.sqrt() * Decimal(repr(z))
+
+
+def deflated_sharpe_ratio(sharpe, observations, skewness, kurtosis, trials, sharpe_variance):
+    """Bailey and Lopez de Prado (2014), Eq. 2. Sharpe and its variance are per period, never annualized."""
+    if type(observations) is not int or observations < 2:
+        raise ValueError("Observations must be an integer of at least 2")
+    sharpe, skewness, kurtosis = number(sharpe), number(skewness), number(kurtosis)
+    threshold = expected_maximum_sharpe(trials, sharpe_variance)
+    with localcontext(CONTEXT):
+        spread = 1 - skewness * sharpe + (kurtosis - 1) / 4 * sharpe ** 2
+        if spread <= 0:
+            raise ValueError("Skewness and kurtosis leave no valid Sharpe ratio variance")
+        z = (sharpe - threshold) * Decimal(observations - 1).sqrt() / spread.sqrt()
+    return Decimal(repr(NormalDist().cdf(float(z))))
+
+
+def deflated_sharpe(returns, trials, sharpe_variance):
+    """The deflated Sharpe ratio of a per-period return series, with every input and intermediate value."""
+    moments = return_moments(returns)
+    return {**moments, "trials": trials, "sharpe_variance": number(sharpe_variance),
+            "expected_maximum_sharpe": expected_maximum_sharpe(trials, sharpe_variance),
+            "deflated_sharpe_ratio": deflated_sharpe_ratio(moments["sharpe"], moments["observations"],
+                                                           moments["skewness"], moments["kurtosis"],
+                                                           trials, sharpe_variance)}
