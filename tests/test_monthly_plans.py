@@ -33,8 +33,8 @@ def snapshot(prices=PRICES, actions=(), listed=None, skip=(), quiet=()):
     return Snapshot(DAYS, bars, META, tuple(Security(a, a, "SYNTHETIC", listed.get(a)) for a in prices), actions)
 
 
-def rates(rate="0.365", changed_from=None, changed_rate="0.9", first=date(2023, 12, 1)):
-    days = (first + timedelta(i) for i in range((date(2024, 5, 1) - first).days))
+def rates(rate="0.365", changed_from=None, changed_rate="0.9", first=date(2023, 12, 1), end=date(2024, 5, 1)):
+    days = (first + timedelta(i) for i in range((end - first).days))
     return CashRateSeries("test", "test_bills", META.retrieved_at, tuple(
         (day, changed_rate if changed_from and day >= changed_from else rate) for day in days))
 
@@ -132,6 +132,14 @@ class HandWorkedRunTests(unittest.TestCase):
         # floor(1000 x 1/3 / 99) = 3 A and floor(1000 x 1/6 / 96) = 1 B.
         self.assertEqual(fills(result), [(A27, "A", "buy", 3, 99), (A27, "B", "buy", 1, 96)])
 
+    def test_inverse_volatility_pairs_each_month_with_its_own_t_bills(self):
+        prices = {"A": (100, 100, 105, 110, 110, 99, 99, 99), "B": (100, 100, 110, 120, 120, 96, 96, 96)}
+        plan = fixture(InverseVolatilityPlan, universe=("A", "B"), volatility_months=2)
+        # 36.5% until Feb 19, then 0%: January's month earns 30 days at 0.1% a day (1.03), March's nothing.
+        result = run(plan, snapshot(prices), rates(changed_from=date(2024, 2, 20), changed_rate="0"))
+        # A: +10% - 3% = 0.07, then -10% - 0% = -0.10; two values 0.17 apart have sample variance 0.17^2 / 2.
+        self.assertEqual(dict(decided(result, M28)["A"].features)["monthly_excess_volatility"], D("0.01445").sqrt())
+
 
 class LookAheadTests(unittest.TestCase):
     def test_later_prices_actions_and_rates_do_not_change_earlier_decisions(self):
@@ -208,6 +216,10 @@ class PreflightTests(unittest.TestCase):
                                                 "observation before 2024-01-28"):
             run(self.DUAL, self.DATA, late, start=F28)
         run(self.DUAL, self.DATA, late, start=M28)  # March's lookback starts on Feb 28.
+        early = rates(end=date(2024, 3, 10))  # Its last observation, Mar 9, is stale for March's lookback.
+        with self.assertRaisesRegex(ValueError, "must cover every lookback in the run: test_bills is stale for "
+                                                "2024-03-27"):
+            run(self.DUAL, self.DATA, early, start=F28)
 
     def test_bindings_and_settings_are_checked(self):
         trend = fixture(TrendPlan, universe=("A", "B"), average_months=2)

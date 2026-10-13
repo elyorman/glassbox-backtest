@@ -41,7 +41,8 @@ class DualMomentumRuleTests(unittest.TestCase):
     BILLS = (D("1.01"), D("1.01"))  # Two months at 1%: T-bills return 2.01%.
 
     def decide(self, us, non_us):
-        return self.PLAN.targets(values(U=(100, 100, us), N=(100, 100, non_us), B=(50,)), self.BILLS)
+        # The middle month differs, so reading the window one month short changes the outcome.
+        return self.PLAN.targets(values(U=(100, 95, us), N=(100, 105, non_us), B=(50,)), self.BILLS)
 
     def test_the_stronger_stock_market_when_us_stocks_beat_t_bills(self):
         targets = self.decide(110, 120)  # US +10% beats 2.01%; non-US +20% is stronger.
@@ -51,7 +52,9 @@ class DualMomentumRuleTests(unittest.TestCase):
         self.assertEqual(dict(targets["U"].features), {"bill_lookback_return": D("0.0201"),
                                                       "lookback_return": D("0.10")})
         self.assertEqual(weights(self.decide(110, 105)), {"U": 1, "N": 0, "B": 0})
-        self.assertEqual(weights(self.decide(110, 110)), {"U": 1, "N": 0, "B": 0})  # A tie stays in the US.
+        tie = self.decide(110, 110)
+        self.assertEqual(weights(tie), {"U": 1, "N": 0, "B": 0})  # A tie stays in the US.
+        self.assertEqual(tie["N"].reasons, ("us_stocks_beat_bills", "equal_lookback_return"))
 
     def test_bonds_when_t_bills_match_or_beat_us_stocks_even_if_non_us_is_strong(self):
         for us in ("102.01", "101"):
@@ -87,8 +90,8 @@ class SectorRotationRuleTests(unittest.TestCase):
     def test_always_invested_ties_by_ticker_and_empty_slots_in_cash(self):
         self.assertEqual(weights(self.PLAN.targets(values(C=(100, 90, 80, 85), D=(100, 95, 90, 95)))),
                          {"C": D("0.5"), "D": D("0.5")})  # Both negative, still held.
-        self.assertEqual(weights(self.PLAN.targets(values(B=(100, 1, 110, 1), A=(100, 1, 110, 1),
-                                                          C=(100, 1, 110, 1)))),
+        self.assertEqual(weights(self.PLAN.targets(values(C=(100, 1, 110, 1), B=(100, 1, 110, 1),
+                                                          A=(100, 1, 110, 1)))),
                          {"A": D("0.5"), "B": D("0.5"), "C": 0})
         self.assertEqual(weights(self.PLAN.targets(values(A=(100, 110, 120, 90)))), {"A": D("0.5")})
 
@@ -118,6 +121,7 @@ class InverseVolatilityRuleTests(unittest.TestCase):
         self.assertEqual((targets["Z"].qualifies, targets["Z"].reasons), (False, ("zero_volatility",)))
         with self.assertRaisesRegex(ValueError, "one T-bill growth factor per month"):
             self.PLAN.targets(two, self.BILLS[:2])
+        self.assertEqual(self.PLAN.targets({}, None), {})
 
 
 class PlanConfigurationTests(unittest.TestCase):
@@ -135,6 +139,23 @@ class PlanConfigurationTests(unittest.TestCase):
                               plan.max_volume_participation, plan.purpose),
                              (D("0.95"), 0, 20, D("0.01"), "built_in_plan"))
         self.assertEqual([p.USES_BILLS for p in builtin_plans()], [False, True, False, True])
+
+    def test_rules_refuse_values_they_were_not_built_for(self):
+        trend = TrendPlan(name="t", universe=("A",), average_months=3, purpose="engineering_fixture")
+        dual = DualMomentumPlan(name="d", universe=("U", "N", "B"), us_stocks="U", non_us_stocks="N", bonds="B",
+                                lookback_months=2, purpose="engineering_fixture")
+        sectors = SectorRotationPlan(name="s", universe=("A",), lookback_months=3, purpose="engineering_fixture")
+        inverse = InverseVolatilityPlan(name="v", universe=("A",), volatility_months=3,
+                                        purpose="engineering_fixture")
+        cases = ((trend, values(A=(1, 2)), None, "trend needs 3 month-end values for A, got 2"),
+                 (trend, values(X=(1, 2, 3)), None, "trend needs no month-end values for X"),
+                 (dual, values(U=(1,), N=(1, 1, 1), B=(1,)), (D(1), D(1)), "needs 3 month-end values for U"),
+                 (dual, values(U=(1, 1, 1), N=(1, 1, 1), B=(1, 1)), (D(1), D(1)), "needs 1 month-end values for B"),
+                 (sectors, values(A=(1, 1, 1)), None, "sector_rotation needs 4"),
+                 (inverse, values(A=(1,) * 7), (D(1),) * 3, "inverse_volatility needs 4"))
+        for plan, series, bills, message in cases:
+            with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                plan.targets(series, bills)
 
     def test_invalid_settings_are_refused(self):
         base = dict(name="t", universe=("A",), purpose="engineering_fixture")

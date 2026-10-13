@@ -34,6 +34,7 @@ class RebalanceOrderTests(unittest.TestCase):
 
     def test_a_budget_below_one_share_is_a_skip_not_a_hold(self):
         self.assertEqual(order(equity="100"), ("skip", 0, 0, ("below_one_share",)))
+        self.assertEqual(order(held="1", equity="100"), ("sell", 1, 0, ()))  # $50 buys no $120 share.
 
     def test_entry_costs_are_inside_the_budget(self):
         # 1% slippage: floor(500 / 101) = 4, not 5.

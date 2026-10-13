@@ -55,6 +55,8 @@ class CashRateSeriesTests(unittest.TestCase):
             # One day earns 0.365 / 365 = 0.001; then 1.001 earns 0.001 a day for four days.
             self.assertEqual(rates.growth(sessions), Decimal("1.005004"))
         self.assertEqual(rates.growth(sessions[:1]), Decimal(1))
+        with self.assertRaisesRegex(ValueError, "at least one session"):
+            rates.growth(())
         with self.assertRaisesRegex(ValueError, "stale for 2024-01-15"):
             rates.growth((date(2024, 1, 15), date(2024, 1, 16)))
         with self.assertRaisesRegex(ValueError, "later session"):

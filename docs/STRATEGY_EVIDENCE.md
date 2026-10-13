@@ -142,7 +142,8 @@ Deflated Sharpe inputs, stated in every pack and computed per parent:
 - **N:** the ledger's cumulative trial count including the current study's
   declared configurations. A per-role count is reported alongside.
 - **V[SR]:** the primary DSR uses the larger of these two variances of daily
-  Sharpe ratios; the pack also reports DSR under the smaller one:
+  Sharpe ratios, each a sample variance (dividing by n − 1); the pack also
+  reports DSR under the smaller one:
   - the study's own: across the configurations declared in the current
     registration (at least three: the parent and its declared neighbours;
     rebalance-shift copies excluded), at 10 bps, under this document's cash and

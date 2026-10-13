@@ -55,6 +55,8 @@ class CashRateSeries:
     def growth(self, sessions) -> Decimal:
         """Growth of 1 unit of idle cash held over consecutive `sessions`, credited as the engine credits it."""
         sessions = tuple(sessions)
+        if not sessions:
+            raise ValueError("Cash growth needs at least one session")
         growth = Decimal(1)
         with localcontext(Context(prec=28, rounding=ROUND_HALF_EVEN)):  # The engine's context, whoever calls.
             for previous, day in zip(sessions, sessions[1:]):

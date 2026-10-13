@@ -1,10 +1,11 @@
 """Deflated Sharpe ratio against Bailey and Lopez de Prado's (2014) worked example and hand-worked moments."""
 
 from decimal import Decimal
+from statistics import NormalDist
 import unittest
 
 from quant_core.validation.statistics import (
-    deflated_sharpe, deflated_sharpe_ratio, expected_maximum_sharpe, return_moments,
+    deflated_sharpe, deflated_sharpe_ratio, expected_maximum_sharpe, return_moments, sharpe_variance,
 )
 
 D = Decimal
@@ -29,6 +30,17 @@ class PaperExampleTests(unittest.TestCase):
         self.assertLess(deflated_sharpe_ratio(SHARPE, 1250, -3, 10, 100, VARIANCE * 2), base)
         self.assertEqual(expected_maximum_sharpe(100, 0), 0)
 
+    def test_results_keep_twelve_decimals(self):
+        # Float-derived digits beyond about 16 are noise and may differ between platforms' maths libraries.
+        self.assertEqual(expected_maximum_sharpe(100, VARIANCE), D("0.113172001865"))
+        self.assertEqual(deflated_sharpe_ratio(SHARPE, 1250, -3, 10, 100, VARIANCE).as_tuple().exponent, -12)
+
+    def test_sharpe_variance_is_the_sample_variance(self):
+        # Deviations -0.01, 0 and +0.01 from 0.02: (0.0001 + 0 + 0.0001) / (3 - 1).
+        self.assertEqual(sharpe_variance(("0.01", "0.02", "0.03")), D("0.0001"))
+        with self.assertRaisesRegex(ValueError, "at least two"):
+            sharpe_variance(("0.01",))
+
 
 class MomentTests(unittest.TestCase):
     def test_symmetric_returns(self):
@@ -51,6 +63,9 @@ class MomentTests(unittest.TestCase):
             moments["sharpe"], 4, moments["skewness"], moments["kurtosis"], 10, "0.01"))
         self.assertEqual((report["trials"], report["sharpe_variance"], report["expected_maximum_sharpe"]),
                          (10, D("0.01"), expected_maximum_sharpe(10, "0.01")))
+        # z is the statistic inside the normal distribution, so a reader can check the last step.
+        self.assertEqual(D(repr(NormalDist().cdf(float(report["z"])))).quantize(D("1e-12")),
+                         report["deflated_sharpe_ratio"])
 
 
 class RefusalTests(unittest.TestCase):

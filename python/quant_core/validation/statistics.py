@@ -5,10 +5,11 @@ from math import e
 from random import Random
 from statistics import NormalDist, median
 
-from quant_core.analytics import CONTEXT, mean, paired_metrics
+from quant_core.analytics import CONTEXT, mean, paired_metrics, variance
 from quant_core.data import number
 
 EULER_GAMMA = 0.5772156649015329  # Euler-Mascheroni constant, binary floating point like NormalDist.
+FLOAT_PLACES = Decimal("1e-12")  # Results through NormalDist carry about 16 real digits; keep 12 decimals.
 
 
 def stationary_indices(length, expected_block, random):
@@ -128,6 +129,15 @@ def return_moments(returns):
                 "skewness": m3 / (m2 * m2.sqrt()), "kurtosis": m4 / (m2 * m2)}
 
 
+def sharpe_variance(sharpes):
+    """V of the deflated Sharpe ratio: the sample variance (n - 1) of per-period Sharpe ratios across trials."""
+    values = tuple(map(number, sharpes))
+    if len(values) < 2:
+        raise ValueError("Sharpe variance needs at least two Sharpe ratios")
+    with localcontext(CONTEXT):
+        return variance(values)
+
+
 def expected_maximum_sharpe(trials, sharpe_variance):
     """Bailey and Lopez de Prado (2014), Eq. 1 with zero mean: the expected best of `trials` unskilled Sharpe ratios."""
     if type(trials) is not int or trials < 2:
@@ -139,11 +149,16 @@ def expected_maximum_sharpe(trials, sharpe_variance):
     z = ((1 - EULER_GAMMA) * normal.inv_cdf(1 - 1 / trials)
          + EULER_GAMMA * normal.inv_cdf(1 - 1 / (trials * e)))
     with localcontext(CONTEXT):
-        return variance.sqrt() * Decimal(repr(z))
+        return (variance.sqrt() * Decimal(repr(z))).quantize(FLOAT_PLACES)
 
 
 def deflated_sharpe_ratio(sharpe, observations, skewness, kurtosis, trials, sharpe_variance):
     """Bailey and Lopez de Prado (2014), Eq. 2. Sharpe and its variance are per period, never annualized."""
+    return _deflation(sharpe, observations, skewness, kurtosis, trials, sharpe_variance)[2]
+
+
+def _deflation(sharpe, observations, skewness, kurtosis, trials, sharpe_variance):
+    """(SR0, z, DSR) for Eq. 2."""
     if type(observations) is not int or observations < 2:
         raise ValueError("Observations must be an integer of at least 2")
     sharpe, skewness, kurtosis = number(sharpe), number(skewness), number(kurtosis)
@@ -153,14 +168,13 @@ def deflated_sharpe_ratio(sharpe, observations, skewness, kurtosis, trials, shar
         if spread <= 0:
             raise ValueError("Skewness and kurtosis leave no valid Sharpe ratio variance")
         z = (sharpe - threshold) * Decimal(observations - 1).sqrt() / spread.sqrt()
-    return Decimal(repr(NormalDist().cdf(float(z))))
+    return threshold, z, Decimal(repr(NormalDist().cdf(float(z)))).quantize(FLOAT_PLACES)
 
 
 def deflated_sharpe(returns, trials, sharpe_variance):
     """The deflated Sharpe ratio of a per-period return series, with every input and intermediate value."""
     moments = return_moments(returns)
+    threshold, z, probability = _deflation(moments["sharpe"], moments["observations"], moments["skewness"],
+                                           moments["kurtosis"], trials, sharpe_variance)
     return {**moments, "trials": trials, "sharpe_variance": number(sharpe_variance),
-            "expected_maximum_sharpe": expected_maximum_sharpe(trials, sharpe_variance),
-            "deflated_sharpe_ratio": deflated_sharpe_ratio(moments["sharpe"], moments["observations"],
-                                                           moments["skewness"], moments["kurtosis"],
-                                                           trials, sharpe_variance)}
+            "expected_maximum_sharpe": threshold, "z": z, "deflated_sharpe_ratio": probability}

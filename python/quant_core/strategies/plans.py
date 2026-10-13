@@ -75,6 +75,13 @@ class PlanConfig:
         if self.purpose not in PURPOSES:
             raise ValueError("Unsupported plan purpose")
 
+    def _check_values(self, values):
+        """Rules take exactly `samples(asset)` month-end values for securities in the universe."""
+        for asset, series in values.items():
+            if asset not in self.universe or len(series) != self.samples(asset):
+                raise ValueError(f"{self.RULE} needs {self.samples(asset) if asset in self.universe else 'no'} "
+                                 f"month-end values for {asset}, got {len(series)}")
+
 
 @dataclass(frozen=True, kw_only=True)
 class TrendPlan(PlanConfig):
@@ -90,6 +97,7 @@ class TrendPlan(PlanConfig):
         return self.average_months
 
     def targets(self, values, bills=None):
+        self._check_values(values)
         share = ONE / len(self.universe)  # A skipped asset's share stays in cash.
         targets = {}
         for asset, series in values.items():
@@ -122,6 +130,7 @@ class DualMomentumPlan(PlanConfig):
         return 1 if asset == self.bonds else self.lookback_months + 1
 
     def targets(self, values, bills):
+        self._check_values(values)
         if set(values) != set(self.universe):
             return {asset: Target(ZERO, False, None, None, ("plan_input_unavailable",)) for asset in values}
         if bills is None or len(bills) != self.lookback_months:
@@ -141,7 +150,9 @@ class DualMomentumPlan(PlanConfig):
         for asset in self.universe:
             reasons = (branch,)
             if asset in returns and chosen != self.bonds:
-                reasons += ("higher_lookback_return" if asset == chosen else "lower_lookback_return",)
+                tied = returns[self.us_stocks] == returns[self.non_us_stocks]  # The US is held on a tie.
+                reasons += ("equal_lookback_return" if tied else
+                            "higher_lookback_return" if asset == chosen else "lower_lookback_return",)
             elif asset == self.bonds and chosen == self.bonds:
                 reasons += ("bond_fallback",)
             features = (("bill_lookback_return", bill_return),)
@@ -171,6 +182,7 @@ class SectorRotationPlan(PlanConfig):
         return self.lookback_months + 1
 
     def targets(self, values, bills=None):
+        self._check_values(values)
         scores = {asset: series[-1 - self.skip_months] / series[0] - ONE for asset, series in values.items()}
         share = ONE / self.top  # With fewer ranked sectors, empty slots stay in cash.
         targets = {}
@@ -197,6 +209,7 @@ class InverseVolatilityPlan(PlanConfig):
         return self.volatility_months + 1
 
     def targets(self, values, bills):
+        self._check_values(values)
         if values and (bills is None or len(bills) != self.volatility_months):
             raise ValueError("Inverse volatility needs one T-bill growth factor per month")
         volatility = {}

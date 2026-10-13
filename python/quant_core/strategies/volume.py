@@ -11,8 +11,7 @@ from quant_core.data.adjustments import adjusted_quantity
 from quant_core.execution import ExecutionProfile, OrderRequest
 from quant_core.features.volume import dollar_volume_percentile
 from quant_core.provenance import content_hash
-from quant_core.sizing import allocation_shares, floor_shares
-from quant_core.strategies import RuleStrategy, rebalance_dates
+from quant_core.strategies import RuleStrategy, rebalance_dates, rebalance_order
 
 ZERO = Decimal(0)
 POLICY = "raw_close_times_contemporaneous_raw_shares_midpoint_percentile_exact_calendar_v1"
@@ -169,26 +168,12 @@ class VolumeStrategy:
             selected = asset in chosen
             quantity = held.get(asset, ZERO)
             target_fraction = fraction if selected else ZERO
-            target = allocation_shares(context.equity, target_fraction, features[asset]["raw_close"], self.execution) if selected else ZERO
-            delta = target - quantity
             reason = list(reasons[asset])
             reason.append("selected" if selected else "below_selection_cutoff" if asset in ranks else "not_selected")
-            action, requested = "skip", ZERO
-            if delta < 0:
-                action, requested = "sell", -delta
-            elif delta > 0:
-                whole = floor_shares(delta)
-                limit = floor_shares(features[asset]["average_volume"] * cfg.max_volume_participation)
-                if whole < delta:
-                    reason.append("whole_share_buy_rounding")
-                requested = min(whole, limit)
-                if requested < whole:
-                    reason.append("entry_participation_cap")
-                action = "buy" if requested else "skip"
-            elif selected:
-                action = "hold"
-            if selected and action == "skip":
-                reason.append("below_one_share")
+            action, requested, target, extra = rebalance_order(
+                context.equity, target_fraction, features[asset].get("raw_close"), quantity,
+                features[asset].get("average_volume"), cfg.max_volume_participation, self.execution)
+            reason.extend(extra)
             if action in ("buy", "sell"):
                 requests.append(OrderRequest(asset, action, requested, ranks.get(asset, 0), f"{cfg.name}:rebalance_{action}"))
             decisions.append(SignalDecision(context.as_of, asset, cfg.name, not reasons[asset], asset in ranks,

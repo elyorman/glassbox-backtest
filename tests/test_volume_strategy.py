@@ -97,6 +97,8 @@ class VolumePortfolioTests(unittest.TestCase):
         row = next(r for r in result.signal_decisions if r.security_id == "A")
         self.assertEqual(row.target_fraction, D(".19"))
         self.assertEqual(row.requested_quantity, 0)  # floor(25 shares * 1%)
+        self.assertEqual((row.action, row.reason_codes), ("skip", ("selected", "entry_participation_cap",
+                                                                   "below_one_share")))
         result = simulate(configuration=cfg(max_volume_participation="1"))
         buys = [f for f in result.fills if f.side == "buy"]
         self.assertTrue(buys)

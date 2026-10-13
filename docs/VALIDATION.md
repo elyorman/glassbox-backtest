@@ -48,9 +48,10 @@ not just resampling returns from models already trained on the whole history.
 
 `quant_core.validation.statistics` implements Bailey and López de Prado
 (2014) for the evidence packs ([the evidence standard](STRATEGY_EVIDENCE.md),
-Section 4). With SR̂ the per-period Sharpe ratio of T returns, γ̂₃ their
-skewness, γ̂₄ their raw kurtosis (3 for normal returns), N trials and V the
-variance of the trials' per-period Sharpe ratios:
+Section 4). With SR̂ the per-period Sharpe ratio of T per-period returns
+(daily excess returns in a pack), γ̂₃ their skewness, γ̂₄ their raw kurtosis
+(3 for normal returns), N trials and V the sample variance (dividing by n − 1)
+of the trials' per-period Sharpe ratios:
 
 ```text
 SR0 = sqrt(V) × ((1 − γ) Φ⁻¹(1 − 1/N) + γ Φ⁻¹(1 − 1/(N·e)))      γ = 0.5772… (Euler–Mascheroni)
@@ -59,19 +60,22 @@ DSR = Φ((SR̂ − SR0) × sqrt(T − 1) / sqrt(1 − γ̂₃·SR̂ + (γ̂₄ �
 
 - `return_moments(returns)`: SR̂ as mean over sample standard deviation;
   skewness m₃/m₂^1.5 and kurtosis m₄/m₂² from population central moments.
+- `sharpe_variance(sharpes)`: V, the sample variance of per-period Sharpe
+  ratios; the evidence standard decides which trials it covers.
 - `expected_maximum_sharpe(trials, sharpe_variance)`: SR0 (Eq. 1 with zero
   mean, as the paper uses it for the null of no skill).
 - `deflated_sharpe_ratio(sharpe, observations, skewness, kurtosis, trials,
   sharpe_variance)`: Eq. 2, a probability.
 - `deflated_sharpe(returns, trials, sharpe_variance)`: both, with every input
-  and intermediate value for the pack.
+  and intermediate value for the pack, including the z statistic inside Φ.
 
 Sharpe ratios and their variance are per period; annualized values give wrong
 answers. Inputs are refused when N < 2, V < 0, T < 2, the returns have zero
 variance, or the skewness and kurtosis leave a non-positive term under the
-square root. Moments are exact decimals; Φ and Φ⁻¹ use the standard library's
-`NormalDist` in binary floating point, so results agree across platforms far
-beyond the four decimals a pack shows. Tests reproduce the paper's example
+square root. Moments are 28-digit decimals; Φ and Φ⁻¹ use the standard
+library's `NormalDist` in binary floating point, whose last digits can depend
+on the platform's maths library, so SR0 and DSR are rounded to 12 decimal
+places. Packs show and compare four. Tests reproduce the paper's example
 (SR0 ≈ 0.1132, DSR ≈ 0.9004).
 
 ## Frozen campaign and qualification contract
