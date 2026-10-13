@@ -1,10 +1,63 @@
 # Rule-based strategies
 
 The strategy engine: rule families, allocation profiles, causal features and
-the audit contract shared by every strategy. The six research families below
-were built for the 2026-10 studies; the V1 built-in plans (see
-[the roadmap](ROADMAP.md)) are added on this contract and qualify under
-[the evidence standard](STRATEGY_EVIDENCE.md).
+the audit contract shared by every strategy. The four built-in plans of the
+tester release (see [the roadmap](ROADMAP.md)) come first; they qualify under
+[the evidence standard](STRATEGY_EVIDENCE.md). The research families after
+them were built for the 2026-10 studies.
+
+## Built-in plans
+
+`quant_core/strategies/plans.py`; design and verified sources in
+[the Plan D design](superpowers/specs/2026-10-12-rule-plans-design.md). Each
+plan decides on month-end sessions from total-return signal values (the index
+under "Causal feature and calendar contract", sampled on decision sessions),
+trades at the next open and invests 95% of equity. A skipped ETF's weight stays
+in cash unless its rule says otherwise.
+
+| Plan | ETFs | Rule | Sources | First full decision |
+| --- | --- | --- | --- | --- |
+| `multi_asset_trend` | SPY, EFA, IEF, VNQ, GSG | Each ETF holds a fifth while its month-end value is strictly above the average of its last 10; otherwise its fifth stays in cash | Faber 2007 (2013 update); Moskowitz, Ooi and Pedersen 2012 | 2007-04-30 |
+| `dual_momentum` | SPY, EFA, AGG | If SPY's 12-month return beats T-bills over the same months, hold the stronger of SPY and EFA (SPY on a tie); otherwise AGG | Antonacci 2014, absolute momentum first; Asness, Moskowitz and Pedersen 2013 | 2003-10-31 |
+| `us_sector_rotation` | XLB, XLE, XLF, XLI, XLK, XLP, XLU, XLV, XLY; XLRE and XLC once they have 13 month-ends | The top 3 by return from 12 month-ends ago to 1 month-end ago, a third each; negative returns stay eligible | Asness, Moskowitz and Pedersen 2013; Moskowitz and Grinblatt 1999; Faber 2010 | 1999-12-31 |
+| `inverse_volatility` | SPY, IEF, LQD, GSG | Weights proportional to 1/σ of the last 36 monthly returns over T-bills, rescaled over the ETFs with 36 months of history | Asness, Frazzini and Pedersen 2012; Maillard, Roncalli and Teïletche 2010 | 2005-07-29 (GSG from 2009-07-31) |
+
+Departures from the sources, none chosen from results: fills at the next open
+rather than the signal close; a 5% cash cushion; EFA for ACWI ex-US (history
+from 2001 rather than 2008); VNQ, IEF, LQD and the S&P 500 for the papers'
+indexes; monthly sector re-ranking (Faber 2010) rather than Moskowitz and
+Grinblatt's six-month hold.
+
+- **Decision sessions.** `decision_sessions(calendar, offset)`: the last
+  session of each completed month in the bound calendar, moved by −2 to +2
+  sessions for the rebalance-day sensitivity. "10 months" means the current
+  decision and the nine before it.
+- **T-bills.** Dual momentum and inverse volatility bind their own
+  `CashRateSeries` and compound it as the engine credits idle cash, so their
+  decisions are the same whether the run's idle cash earns the Treasury rate or
+  0%. Preflight refuses a run whose series does not cover every lookback.
+- **Data checks and audit.** A security is skipped with a reason
+  (`outside_security_lifetime`, `insufficient_history`, `missing_signal_bar`,
+  `missing_history_session`, `liquidity_filter`). Each decision records one
+  `SignalDecision` per ETF: the rule's reason (for example `above_average`,
+  `us_stocks_beat_bills`, `bond_fallback`, `top_ranked`,
+  `inverse_volatility_weight`), the numbers behind it, the target share of
+  equity and the order. Orders come from `rebalance_order`, the whole-share
+  arithmetic of the `scheduled_slots` profile below.
+- **Limitations pages** also cite evidence after publication (no rule depends
+  on it): Hurst, Ooi and Pedersen 2017 on trend following since 1880; Daniel
+  and Moskowitz 2016 on momentum crashes; Anderson, Bianchi and Goldberg 2012
+  on risk parity's dependence on dates and costs; McLean and Pontiff 2016 on
+  weaker returns after publication.
+
+```python
+from quant_core.strategies.plans import build_plan, builtin_plans
+
+trend, dual, sectors, inverse = builtin_plans()
+settings = RunConfig(execution=ExecutionProfile("10"), universe=dual.universe, start=start, cash_rates=bills)
+source = build_plan(snapshot, dual, start=settings.start, execution=settings.execution, cash_rates=bills)
+result = run_backtest(snapshot, source, settings)
+```
 
 ## Research basis and exact rules
 

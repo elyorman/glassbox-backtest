@@ -6,11 +6,23 @@ oldest first, and T-bill growth per month; MonthlyPlan owns the data checks,
 share counts and orders.
 """
 
-from dataclasses import dataclass
+from bisect import bisect_left, bisect_right
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
-from typing import ClassVar
+from types import MappingProxyType
+from typing import ClassVar, Mapping
 
-from quant_core.data import identity, number
+from quant_core.backtest.contracts import SignalDecision, SourceSpec
+from quant_core.backtest.sources import OrderBatch
+from quant_core.data import Security, identity, number, require_raw_volume, session
+from quant_core.data.adjustments import adjusted_quantity
+from quant_core.data.rates import CashRateSeries
+from quant_core.execution import ExecutionProfile, OrderRequest
+from quant_core.features import PRICE_POLICY, signal_prices
+from quant_core.provenance import content_hash
+from quant_core.strategies import rebalance_dates, rebalance_order
 
 ZERO, ONE = Decimal(0), Decimal(1)
 PURPOSES = ("built_in_plan", "engineering_fixture")
@@ -210,3 +222,183 @@ def builtin_plans():
             SectorRotationPlan(name="us_sector_rotation", universe=(
                 "XLB", "XLC", "XLE", "XLF", "XLI", "XLK", "XLP", "XLRE", "XLU", "XLV", "XLY")),
             InverseVolatilityPlan(name="inverse_volatility", universe=("SPY", "IEF", "LQD", "GSG")))
+
+
+def decision_sessions(calendar, offset=0):
+    """Month-end sessions moved by `offset` sessions; a moved session outside the calendar is dropped."""
+    calendar = tuple(calendar)
+    index = {day: position for position, day in enumerate(calendar)}
+    return tuple(calendar[index[day] + offset] for day in rebalance_dates(calendar, "month_end")
+                 if 0 <= index[day] + offset < len(calendar))
+
+
+@dataclass(frozen=True, kw_only=True)
+class PlanSpec(SourceSpec):
+    plan: PlanConfig
+    rule: str
+    signal_price_policy: str
+    calendar: tuple[date, ...]
+    first_signal_session: date
+    decision_sessions: tuple[date, ...]
+    allocation_execution: ExecutionProfile
+    cash_rates: CashRateSeries | None
+
+
+@dataclass(frozen=True)
+class MonthlyPlan:
+    """Order source for a built-in plan: data checks, month-end values, the rule, then whole-share orders."""
+    plan: PlanConfig
+    calendar: tuple[date, ...]
+    securities: tuple[Security, ...]
+    first_signal_session: date
+    execution: ExecutionProfile = field(default_factory=ExecutionProfile)
+    cash_rates: CashRateSeries | None = None  # The plan's own T-bill series, independent of idle-cash interest.
+    _spec: PlanSpec = field(init=False, repr=False, compare=False)
+    _decisions: Mapping = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self):
+        if not isinstance(self.plan, PlanConfig) or not self.plan.RULE:
+            raise ValueError("Monthly plan requires a plan configuration")
+        if not isinstance(self.execution, ExecutionProfile):
+            raise ValueError("Monthly plan requires an allocation execution profile")
+        if self.cash_rates is not None and not isinstance(self.cash_rates, CashRateSeries):
+            raise ValueError("Plan T-bill rates require CashRateSeries")
+        if self.plan.USES_BILLS != (self.cash_rates is not None):
+            raise ValueError("Dual momentum and inverse volatility need their own T-bill rates; other plans take none")
+        calendar = tuple(self.calendar)
+        session(self.first_signal_session)
+        if self.first_signal_session not in calendar:
+            raise ValueError("First signal session is outside the supplied calendar")
+        securities = tuple(sorted(self.securities, key=lambda s: s.security_id))
+        if tuple(s.security_id for s in securities) != self.plan.universe:
+            raise ValueError("Plan securities must match its universe")
+        decisions = decision_sessions(calendar, self.plan.decision_offset)
+        object.__setattr__(self, "calendar", calendar)
+        object.__setattr__(self, "securities", securities)
+        object.__setattr__(self, "_decisions", MappingProxyType({day: k for k, day in enumerate(decisions)}))
+        digest = content_hash(("monthly_plan_v1", self.plan.RULE, PRICE_POLICY, self.plan, calendar, securities,
+                               self.first_signal_session, decisions, self.execution, self.cash_rates))
+        object.__setattr__(self, "_spec", PlanSpec(
+            name=self.plan.name, version="1", artifact_hash=digest, purpose=self.plan.purpose, plan=self.plan,
+            rule=self.plan.RULE, signal_price_policy=PRICE_POLICY, calendar=calendar,
+            first_signal_session=self.first_signal_session, decision_sessions=decisions,
+            allocation_execution=self.execution, cash_rates=self.cash_rates))
+
+    @property
+    def spec(self):
+        return self._spec
+
+    @property
+    def _window(self):
+        return max(self.plan.samples(asset) for asset in self.plan.universe)
+
+    def validate_run(self, snapshot, run_config):
+        """Preflight hook: bindings, data declarations and T-bill coverage; never reads outcomes."""
+        require_raw_volume(snapshot.metadata, "Plan liquidity rules")
+        if tuple(snapshot.sessions) != self.calendar or run_config.start != self.first_signal_session:
+            raise ValueError("Plan calendar/start must match its frozen run binding")
+        registry = {s.security_id: s for s in snapshot.securities}
+        if any(registry.get(s.security_id) != s for s in self.securities):
+            raise ValueError("Plan security registry disagrees with the dataset")
+        if not set(self.plan.universe) <= set(run_config.universe):
+            raise ValueError("Plan universe is outside the run universe")
+        if self.execution != run_config.execution:
+            raise ValueError("Plan allocation costs must match the frozen execution profile")
+        if not snapshot.metadata.actions_complete and run_config.actions_policy != "allow_incomplete_diagnostic":
+            raise ValueError("Total-return plan signals require declared complete corporate actions")
+        if run_config.risk is not None:
+            raise ValueError("Built-in plans size by target weight and require risk=None")
+        decisions = self.spec.decision_sessions
+        inside = [k for k, day in enumerate(decisions) if run_config.start <= day <= run_config.end]
+        if self.cash_rates is not None and inside:
+            # The engine checks rates for the run's sessions; lookbacks reach back before the run start.
+            first, last = decisions[max(0, inside[0] + 1 - self._window)], decisions[inside[-1]]
+            for day in self.calendar[bisect_left(self.calendar, first):bisect_left(self.calendar, last)]:
+                try:
+                    self.cash_rates.rate_before(day)
+                except ValueError as exc:
+                    raise ValueError(f"Plan T-bill rates must cover every lookback in the run: {exc}") from None
+
+    def orders(self, context):
+        if context.as_of not in self._decisions or context.as_of < self.first_signal_session:
+            return OrderBatch((), ())
+        return self.evaluate(context)
+
+    def evaluate(self, context):
+        """The plan's decision on one of its decision sessions; scheduling stays in orders()."""
+        k = self._decisions.get(context.as_of)
+        if k is None:
+            raise ValueError("Plan evaluation requires one of its decision sessions")
+        plan, decisions = self.plan, self.spec.decision_sessions
+        registry = {s.security_id: s for s in self.securities}
+        splits, dividends = defaultdict(list), defaultdict(list)
+        for event in context.splits:
+            splits[event.security_id].append(event)
+        for event in context.dividends:
+            dividends[event.security_id].append(event)
+        stop = bisect_right(self.calendar, context.as_of)
+        values, checks, data = {}, {}, {}
+        for asset in plan.universe:
+            needed, reasons, features = plan.samples(asset), [], {}
+            if not registry[asset].active_on(context.as_of):
+                reasons.append("outside_security_lifetime")
+            elif k + 1 < needed:
+                reasons.append("insufficient_history")
+            else:
+                samples = decisions[k + 1 - needed:k + 1]
+                span = stop - bisect_left(self.calendar, samples[0])
+                count = max(span, plan.volume_lookback)
+                history = context.history(asset, count)
+                if not history or history[-1].session != context.as_of:
+                    reasons.append("missing_signal_bar")
+                elif len(history) < count:
+                    reasons.append("insufficient_history")
+                elif tuple(b.session for b in history) != self.calendar[stop - count:stop]:
+                    reasons.append("missing_history_session")
+                else:
+                    recent = history[-plan.volume_lookback:]
+                    volume = sum((adjusted_quantity(b.volume, asset, b.session, context.as_of, splits[asset])
+                                  for b in recent), ZERO) / plan.volume_lookback
+                    features.update(raw_close=history[-1].close, average_volume=volume)
+                    if volume <= 0:
+                        reasons.append("liquidity_filter")
+                    else:
+                        index = signal_prices(history[-span:], splits[asset], dividends[asset])
+                        position = {bar.session: i for i, bar in enumerate(history[-span:])}
+                        values[asset] = tuple(index[position[day]] for day in samples)
+            checks[asset], data[asset] = tuple(reasons), features
+        bills = None
+        if self.cash_rates is not None and k + 1 >= self._window:
+            months = decisions[k + 1 - self._window:k + 1]
+            bills = tuple(self.cash_rates.growth(self.calendar[bisect_left(self.calendar, a):
+                                                               bisect_left(self.calendar, b) + 1])
+                          for a, b in zip(months, months[1:]))
+        targets = plan.targets(values, bills)
+        held = {p.security_id: p.quantity for p in context.positions}
+        requests, records = [], []
+        for asset in plan.universe:
+            target = targets.get(asset)
+            weight = target.weight if target else ZERO
+            fraction, quantity = weight * plan.invested_fraction, held.get(asset, ZERO)
+            action, requested, shares, extra = rebalance_order(
+                context.equity, fraction, data[asset].get("raw_close"), quantity,
+                data[asset].get("average_volume"), plan.max_volume_participation, self.execution)
+            rank = target.rank if target else None
+            if action in ("buy", "sell"):
+                requests.append(OrderRequest(asset, action, requested, rank or 0, f"{plan.name}:rebalance_{action}"))
+            reasons = checks[asset] + (target.reasons if target else ()) + extra
+            records.append(SignalDecision(
+                context.as_of, asset, plan.name, asset in values, bool(target and target.qualifies), weight > 0,
+                target.score if target else None, rank, fraction, quantity, shares, action, requested,
+                reasons or ("not_selected",), tuple(data[asset].items()) + (target.features if target else ())))
+        return OrderBatch(tuple(requests), tuple(records))
+
+
+def build_plan(snapshot, plan, start=None, execution=None, cash_rates=None):
+    """Bind a plan to a snapshot's calendar and registry; the start defaults to the first session."""
+    registry = {s.security_id: s for s in snapshot.securities}
+    if any(asset not in registry for asset in plan.universe):
+        raise ValueError("Plan contains unknown security IDs")
+    return MonthlyPlan(plan, snapshot.sessions, tuple(registry[a] for a in plan.universe),
+                       start or snapshot.sessions[0], execution if execution is not None else ExecutionProfile(),
+                       cash_rates)
