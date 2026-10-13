@@ -5,6 +5,7 @@ from datetime import date, datetime, timezone
 from hashlib import sha256
 import os
 from pathlib import Path
+import re
 import sys
 
 from quant_core.data import DataMetadata
@@ -42,23 +43,21 @@ def _tiingo_key(env_file):
         for line in lines:
             name, separator, value = line.strip().partition("=")
             if separator and name.removeprefix("export ").strip() == "TIINGO_API_KEY":
-                value = value.strip()
-                if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-                    key = value[1:-1]
-                else:
-                    key = value.split(" #", 1)[0].strip()  # An unquoted value may end with a comment.
+                quoted = re.fullmatch(r"""(['"])(.*?)\1\s*(#.*)?""", value.strip())
+                key = quoted.group(2) if quoted else value.split(" #", 1)[0].strip()  # A value may end with a comment.
     if not key:
         raise ValueError(f"Set TIINGO_API_KEY in the environment or in {env_file}")
     return key
 
 
 def _download(args):
-    from quant_core.data.dataset import DownloadIncomplete, download_dataset, save_dataset
+    from quant_core.data.dataset import DownloadIncomplete, download_dataset, existing_directory_error, save_dataset
     from quant_core.data.remote import RequestBudget
     from quant_core.data.tiingo import TiingoClient, last_final_day
     from quant_core.data.treasury import TreasuryClient
-    if args.output.exists():
-        raise ValueError(f"Dataset directory {args.output} already exists; datasets are never overwritten")
+    problem = existing_directory_error(args.output)
+    if problem:
+        raise ValueError(problem)
     final = last_final_day(_now())
     if args.end is not None and args.end > final:
         raise ValueError(f"--end must be on or before {final}, the latest day whose Tiingo data is final")

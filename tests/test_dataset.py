@@ -135,6 +135,7 @@ class DatasetTests(unittest.TestCase):
                                    FakeTreasury())
         self.assertEqual(log[1::2], [("prices", "SPY", D1, saturday), ("prices", "GLD", D2, D3)])
         self.assertEqual((dataset.manifest["requested_end"], dataset.manifest["end"]), ("2024-01-06", "2024-01-04"))
+        self.assertEqual(dataset.manifest["rates"]["last"], "2024-01-04")  # Not 2024-01-05, after the last session.
         late = download_dataset(["SPY", "GLD"], D3, FakeTiingo({"SPY": SPY_ROWS, "GLD": body(row(D3, "51"))},
                                                                {"SPY": D1, "GLD": D3}), FakeTreasury())
         self.assertEqual(late.manifest["securities"]["GLD"]["first_session"], "2024-01-04")  # Starts on the end.
@@ -182,8 +183,14 @@ class DatasetTests(unittest.TestCase):
             self.assertFalse((path / "manifest.json").exists())  # The manifest is written last.
             with self.assertRaisesRegex(ValueError, "is incomplete or unreadable"):
                 load_dataset(path)
-            with self.assertRaisesRegex(ValueError, "exists but is incomplete .no manifest.json.; delete it"):
+            with self.assertRaisesRegex(ValueError, "exists but is incomplete .no manifest.json.: a save failed; "
+                                                    "delete it"):
                 save_dataset(path, dataset)
+            unrelated = Path(directory) / "notes"
+            unrelated.mkdir()
+            (unrelated / "thesis.txt").write_text("mine")
+            with self.assertRaisesRegex(ValueError, "notes already exists; datasets are never overwritten"):
+                save_dataset(unrelated, dataset)  # Never told to delete a folder that is not a failed save.
 
     def test_a_spent_budget_stops_the_download_and_a_later_run_resumes_from_the_cache(self):
         with TemporaryDirectory() as directory:
@@ -313,7 +320,8 @@ class DownloadCommandTests(unittest.TestCase):
 
     def test_env_files_written_on_windows_are_understood(self):
         for raw, key in ((b"\xef\xbb\xbfTIINGO_API_KEY=SECRET-3\r\n", "SECRET-3"),  # A byte-order mark.
-                         (b"# my keys\r\nTIINGO_API_KEY=OLD\r\nTIINGO_API_KEY=SECRET-5  # newer\r\n", "SECRET-5")):
+                         (b"# my keys\r\nTIINGO_API_KEY=OLD\r\nTIINGO_API_KEY=SECRET-5  # newer\r\n", "SECRET-5"),
+                         (b'TIINGO_API_KEY="SECRET-6" # personal key\n', "SECRET-6")):
             (self.root / ".env").write_bytes(raw)
             code, _, err, sent = self.download("--end", "2024-01-04")
             self.assertEqual((code, err), (0, ""))
@@ -335,10 +343,15 @@ class DownloadCommandTests(unittest.TestCase):
         self.assertEqual((code, sent), (2, []))
         self.assertIn("--end must be on or before 2024-01-10", err)
         (self.root / "dataset").mkdir()
+        (self.root / "dataset" / "snapshot.json").write_text("{}")  # Left by a failed save.
+        code, _, err, sent = self.download("--end", "2024-01-04")
+        self.assertEqual((code, sent), (2, []))
+        self.assertIn("exists but is incomplete (no manifest.json): a save failed; delete it", err)
+        (self.root / "dataset" / "notes.txt").write_text("mine")
         code, _, err, sent = self.download("--end", "2024-01-04")
         self.assertEqual((code, sent), (2, []))
         self.assertIn("already exists; datasets are never overwritten", err)
-        (self.root / "dataset").rmdir()
+        rmtree(self.root / "dataset")
         (self.root / ".env").write_text("OTHER=1\n")
         code, _, err, sent = self.download("--end", "2024-01-04")
         self.assertEqual((code, sent), (2, []))

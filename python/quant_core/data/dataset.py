@@ -137,6 +137,19 @@ def _verify(dataset):
         raise ValueError("Dataset rates.json does not match its manifest")
 
 
+def existing_directory_error(directory: Path) -> str | None:
+    """Why `directory` cannot receive a new dataset, or None when it does not exist."""
+    directory = Path(directory)
+    if not directory.exists():
+        return None
+    names = {path.name for path in directory.iterdir()} if directory.is_dir() else set()
+    if names and all(name in ("snapshot.json", "rates.json") or name.startswith((".snapshot-", ".rates-"))
+                     for name in names):
+        return (f"Dataset directory {directory} exists but is incomplete (no manifest.json): a save failed; "
+                "delete it and run again")
+    return f"Dataset directory {directory} already exists; datasets are never overwritten"
+
+
 def save_dataset(directory: Path, dataset: Dataset) -> str:
     """Write a new dataset directory; an existing one is never overwritten. Returns the dataset ID."""
     directory = Path(directory)
@@ -144,10 +157,7 @@ def save_dataset(directory: Path, dataset: Dataset) -> str:
     try:
         directory.mkdir(parents=True)
     except FileExistsError:
-        if not (directory / "manifest.json").exists():
-            raise ValueError(f"Dataset directory {directory} exists but is incomplete (no manifest.json); "
-                             "delete it and run again") from None
-        raise ValueError(f"Dataset directory {directory} already exists; datasets are never overwritten") from None
+        raise ValueError(existing_directory_error(directory)) from None
     save_snapshot(dataset.snapshot, directory / "snapshot.json")
     save_cash_rates(dataset.rates, directory / "rates.json")
     with open(directory / "manifest.json", "x", encoding="utf-8", newline="\n") as stream:
