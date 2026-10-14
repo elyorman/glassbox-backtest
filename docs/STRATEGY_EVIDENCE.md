@@ -98,7 +98,8 @@ carries a regression test.
   deviation reasons (rule 2), related ledger rows (rule 2), any planned
   independent-provider cross-check, bootstrap block lengths, repetitions and
   seed, deflated-Sharpe inputs (Section 4), cumulative trial count and
-  registration time.
+  registration time. The file format, the runs and the commands are in
+  [the validation contract](VALIDATION.md), "Registered studies".
 - **Tag.** An annotated git tag `study/<name>-<YYYY-MM-DD>` on the commit that
   contains the registration file and the exact source. Tags are never moved or
   deleted. The tag is the source archive; do not copy source trees. When the

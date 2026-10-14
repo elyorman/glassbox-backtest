@@ -127,6 +127,82 @@ places. Packs show and compare four. Tests reproduce the paper's example
 Under the 0% cash variant c = 0, so the ratios are measured against a zero
 reference rate, as the standard's secondary variant requires.
 
+## Registered studies
+
+A registered study runs one built-in plan once on a frozen dataset and writes
+its evidence pack ([the evidence standard](STRATEGY_EVIDENCE.md), Sections 2
+and 3).
+
+**Registration.** `docs/registrations/<study>.json` holds exactly these
+fields; `load_registration` refuses anything else and the registration hash
+is the content hash of the file's JSON value.
+
+- `schema_version` (1), `study` (lower-case words joined by hyphens), `role`,
+  `tag` (`study/<study>-<YYYY-MM-DD>`), `registered_at` (ISO time with zone).
+- `code_hash`: `quant_core.provenance.code_hash()` at the tag. `dataset`:
+  the frozen dataset's `id` and its `tickers`, which must include every
+  ticker of the plans plus SPY and IEF.
+- `plan` and `neighbours`: full plan configurations (`plan_to_dict`, with a
+  `rule` field), so each configuration's hash follows from the file. At least
+  two neighbours of the parent's rule; all distinct built-in plans without a
+  decision offset.
+- `rebalance_shifts`: distinct nonzero sessions from −2 to 2. `period` (start,
+  end), `publication` (date, source), `segments` (name, start, end).
+- `costs_bps`, `primary_cost_bps`, `initial_cash`: decimal strings (JSON
+  integers also parse; floats are refused). `primary_reference`:
+  `spy_buy_hold`, `sixty_forty` or `equal_weight`.
+- `bootstrap`: distinct block lengths, at least 100 repetitions, a seed.
+- `trials`: the cumulative count, this study's count (the parent, its
+  neighbours and its shifts), the per-role count and the historical V floor
+  (Section 4 of the standard).
+- `sources` (at least one parameter source), `departures` (what and why),
+  `related_ledger_rows`, `cross_check` (decision and reason), `disclosures`
+  (plain-language text for the limitations page) and `earlier_studies`
+  (each earlier built-in's study name and the directory of its primary run).
+
+**Runs.** `planned_runs` lists every run in a fixed order: the parent at each
+cost; at the primary cost the parent with fills at the second open, with idle
+cash at 0%, with each rebalance shift and as each neighbour; then each
+comparison portfolio at each cost and with 0% cash. The comparison portfolios
+run 95% invested with the plan's costs and idle-cash interest: SPY bought and
+held, 60/40 SPY/IEF rebalanced monthly (57% SPY, 38% IEF, 5% cash), equal
+weights over the plan's ETFs, and T-bills alone. `run_study` refuses a dataset
+whose ID or code whose hash differs from the registration, and an existing
+output directory; it saves each run with `save_run` under
+`<output>/runs/<key>/`. The guard is per directory: the tag and the ledger
+are what make a study's one run auditable.
+
+**Pack.** `build_pack` computes every number from the runs: results by cost,
+the comparison portfolios with what each holds, the plan minus each at the
+primary cost, the observed values and bootstrap intervals against the primary
+reference, the deflated Sharpe ratio, periods, sensitivity (costs, delay,
+0% cash, shifts, neighbours), the cash convention, overlap with earlier
+built-ins and reproduction (the command, the tag, the registration hash,
+dataset ID, code hash and each run's result hash). The limitations page is
+generated, never written after the results: provider, dataset and each ETF's
+first session, the snapshot's limitations and quality warnings, the losing
+calendar years, the five largest drawdowns, a fixed list of what the plan
+does not promise and the registration's disclosures. `write_pack` writes
+`pack.json` (every number at full precision) and `PACK.md` (the same, rounded
+for reading) and never replaces either.
+
+**Commands.** From the repository root at the registration's tag:
+
+```bash
+PYTHONPATH=python .venv/bin/python -m quant_core.validation.study_cli check \
+  docs/registrations/<study>.json --dataset local/data/tester-etfs-2026-10-12
+PYTHONPATH=python .venv/bin/python -m quant_core.validation.study_cli run \
+  docs/registrations/<study>.json --dataset local/data/tester-etfs-2026-10-12 \
+  --output local/<study>
+```
+
+`check` loads the registration, the dataset and each earlier study's primary
+run and runs nothing. `run` does the same, then runs, saves and writes the
+pack. Both print a JSON summary and exit 0, or explain the refusal and exit 2.
+Earlier studies' run directories are relative to the working directory. A
+run that stops before `pack.json` exists has still produced results; record
+it in the ledger before running again.
+
 ## Frozen campaign and qualification contract
 
 `CampaignSpec` records the hypothesis, dataset hash, complete candidate and
