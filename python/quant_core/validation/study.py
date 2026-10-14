@@ -3,14 +3,15 @@
 docs/VALIDATION.md, "Registered studies". The parent plan runs at each cost; at the
 primary cost also with a second-open delay, with idle cash earning 0%, with each
 rebalance shift and as each neighbour; every comparison portfolio runs at each cost
-and with 0% cash. Runs are saved under <output>/runs/<key>/ and never replaced.
+and with 0% cash. Every run completes in memory before anything is saved; runs are
+saved under <output>/runs/<key>/ and never replaced.
 """
 
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 
-from quant_core.backtest import OrderSchedule, RunConfig, run_backtest
+from quant_core.backtest import RunConfig, run_backtest
 from quant_core.execution import ExecutionProfile
 from quant_core.provenance import code_hash
 from quant_core.reporting import save_run
@@ -22,23 +23,23 @@ TBILLS = "tbills"
 
 @dataclass(frozen=True)
 class PlannedRun:
-    """One run of a study: `source` is a plan, a rule strategy, or None for T-bills alone."""
+    """One run of a study: `source` is a plan or a rule strategy."""
     key: str
     role: str
-    source: PlanConfig | StrategyConfig | None
+    source: PlanConfig | StrategyConfig
     cost_bps: Decimal
     delay: int = 1
     cash: bool = True
 
 
 def references(registration):
-    """The comparison portfolios, by name: 95% invested, the same costs and cash as the plan."""
-    return {"spy_buy_hold": StrategyConfig("spy_buy_hold", "buy_hold", ("SPY",), invested_fraction="0.95",
-                                           purpose="benchmark"),
+    """The comparison portfolios, by name: 95% invested, the same costs and cash as the plan. SPY is set back to
+    95% at each month end, so its dividends are reinvested rather than left in cash."""
+    return {"spy_buy_hold": FixedWeightPlan(name="spy_buy_hold", universe=("SPY",), weights=(("SPY", "1"),)),
             "sixty_forty": FixedWeightPlan(name="sixty_forty", universe=("SPY", "IEF"),
                                            weights=(("SPY", "0.6"), ("IEF", "0.4"))),
             "equal_weight": EqualWeightPlan(name="equal_weight", universe=registration.plan.universe),
-            TBILLS: None}
+            TBILLS: StrategyConfig(TBILLS, "cash", ("SPY",), purpose="benchmark")}  # Holds nothing.
 
 
 def _bps(cost):
@@ -60,20 +61,29 @@ def planned_runs(registration):
     for name, source in references(registration).items():
         runs += [PlannedRun(f"{name}-{_bps(cost)}bps", "reference", source, cost) for cost in registration.costs_bps]
         runs.append(PlannedRun(f"{name}-{_bps(primary)}bps-cash0", "reference_cash0", source, primary, cash=False))
+    if len({run.key for run in runs}) != len(runs):
+        raise ValueError("Planned run keys must be unique")
     return tuple(runs)
 
 
+def _start(planned, registration, sessions):
+    """A copy decided k sessions before month end starts k sessions early, so it keeps its first month."""
+    offset = planned.source.decision_offset if isinstance(planned.source, PlanConfig) else 0
+    if offset >= 0:
+        return registration.start
+    if registration.start not in sessions or sessions.index(registration.start) + offset < 0:
+        raise ValueError("The registered start must be a session with sessions before it for the -2 shift")
+    return sessions[sessions.index(registration.start) + offset]
+
+
 def _run(planned, registration, dataset):
-    snapshot, execution, start = dataset.snapshot, ExecutionProfile(planned.cost_bps), registration.start
+    snapshot, execution = dataset.snapshot, ExecutionProfile(planned.cost_bps)
+    start, universe = _start(planned, registration, snapshot.sessions), planned.source.universe
     if isinstance(planned.source, PlanConfig):
-        universe = planned.source.universe
         source = build_plan(snapshot, planned.source, start, execution,
                             dataset.rates if planned.source.USES_BILLS else None)  # Signals keep the T-bills.
-    elif isinstance(planned.source, StrategyConfig):
-        universe = planned.source.universe
-        source = build_strategy(snapshot, planned.source, start, execution)
     else:
-        universe, source = ("SPY",), OrderSchedule((), TBILLS, "1")
+        source = build_strategy(snapshot, planned.source, start, execution)
     config = RunConfig(registration.initial_cash, execution, universe, start, registration.end,
                        execution_delay_sessions=planned.delay, cash_rates=dataset.rates if planned.cash else None)
     return run_backtest(snapshot, source, config)
@@ -85,17 +95,58 @@ def check_study(registration, dataset):
         raise ValueError("The dataset is not the registered one")
     if code_hash() != registration.code_hash:
         raise ValueError("The code differs from the registered code; check out the registration's tag")
+    missing = set(registration.tickers) - {security.security_id for security in dataset.snapshot.securities}
+    if missing:
+        raise ValueError(f"The dataset lacks registered tickers: {', '.join(sorted(missing))}")
+
+
+def first_decision(result):
+    """A plan's first decision session and the ETFs without enough history then."""
+    if not result.signal_decisions:
+        raise ValueError("A plan makes no decision in the registered period")
+    first = min(decision.session for decision in result.signal_decisions)
+    return first, frozenset(d.security_id for d in result.signal_decisions
+                            if d.session == first and "insufficient_history" in d.reason_codes)
+
+
+def simulate_study(registration, dataset):
+    """Every planned run, in memory, after the dataset and code checks; nothing is saved or shown.
+
+    Refuses a start inside a warmup: the parent and each neighbour must have enough
+    history for the same ETFs at their first decision, so the study's own V compares
+    the same period (docs/STRATEGY_EVIDENCE.md, Section 2, "Effective start after
+    signal warmup").
+    """
+    check_study(registration, dataset)
+    results = {planned.key: _run(planned, registration, dataset) for planned in planned_runs(registration)}
+    primary = _bps(registration.primary_cost_bps)
+    parent = first_decision(results[f"plan-{primary}bps"])[1]
+    for neighbour in registration.neighbours:
+        differ = parent ^ first_decision(results[f"neighbour-{neighbour.name}-{primary}bps"])[1]
+        if differ:
+            raise ValueError(f"The period starts inside a warmup: at the first decision {neighbour.name} and the "
+                             f"parent differ in which ETFs have enough history ({', '.join(sorted(differ))}); "
+                             "register a later start")
+    return results
+
+
+def check_output(output):
+    """Refuse an output directory that exists: a registered study runs once."""
+    if Path(output).exists():
+        raise ValueError(f"{output} already exists; a registered study runs once")
+
+
+def save_study(results, output):
+    """Save each completed run once under <output>/runs/<key>/."""
+    check_output(output)
+    Path(output).mkdir(parents=True)
+    for key, result in results.items():
+        save_run(result, Path(output) / "runs" / key)
 
 
 def run_study(registration, dataset, output):
-    """Run and save every planned run; refuses another dataset, other code, or an existing output directory."""
-    check_study(registration, dataset)
-    output = Path(output)
-    if output.exists():
-        raise ValueError(f"{output} already exists; a registered study runs once")
-    output.mkdir(parents=True)
-    results = {}
-    for planned in planned_runs(registration):
-        results[planned.key] = _run(planned, registration, dataset)
-        save_run(results[planned.key], output / "runs" / planned.key)
+    """Every planned run, saved once each after all of them completed; refuses an existing output directory."""
+    check_output(output)
+    results = simulate_study(registration, dataset)
+    save_study(results, output)
     return results

@@ -1,6 +1,7 @@
 """Registrations and plan configurations as plain JSON: everything fixed before a registered run."""
 
 from copy import deepcopy
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from decimal import Decimal
 import json
@@ -33,7 +34,7 @@ def example():
         "costs_bps": ["10", "25", "50"], "primary_cost_bps": "10", "initial_cash": "100000",
         "primary_reference": "sixty_forty",
         "bootstrap": {"block_lengths": [5, 20], "repetitions": 100, "seed": 1729},
-        "trials": {"cumulative": 50, "this_study": 5, "per_role": 4, "historical_floor": "0.000197"},
+        "trials": {"cumulative": 50, "this_study": 5, "per_role": 5, "historical_floor": "0.000197"},
         "sources": [{"parameter": "average_months", "source": "A synthetic paper, p. 1"}],
         "departures": [{"what": "Fills at the next open", "reason": "The engine never fills on the signal bar"}],
         "related_ledger_rows": ["2026-10-03 trend recipes"],
@@ -53,7 +54,8 @@ class PlanDictTests(unittest.TestCase):
         self.assertEqual(plan_to_dict(PARENT)["invested_fraction"], "0.95")  # Decimals are written as text.
 
     def test_unknown_or_malformed_plans_are_refused(self):
-        for values in ({"rule": "magic"}, {"name": "x"}, [], {**plan_to_dict(PARENT), "extra": 1}):
+        for values in ({"rule": "magic"}, {"name": "x"}, [], {**plan_to_dict(PARENT), "extra": 1}, {"rule": []},
+                       {"rule": {}}, {**plan_to_dict(PARENT), "universe": "AB"}):  # Not ("A", "B").
             with self.subTest(values=values), self.assertRaises(ValueError):
                 plan_from_dict(values)
         for value in ("trend", PlanConfig(name="base", universe=("A",))):  # The base class has no rule.
@@ -100,10 +102,22 @@ class RegistrationTests(unittest.TestCase):
             (change(("study",), "Trend Fixture"), "lower-case words"),
             (change(("tag",), "study/other-2026-10-15"), "study/<study>-<YYYY-MM-DD>"),
             (change(("tag",), "study/trend-fixture-latest"), "study/<study>-<YYYY-MM-DD>"),
+            (change(("tag",), "study/trend-fixture-2026-13-45"), "study/<study>-<YYYY-MM-DD>"),
+            (change(("tag",), "study/trend-fixture-2026-10-16"), "tag date must be the registration date"),
+            (change(("role",), "Momentum"), "role must be one of the standard's roles"),
             (change(("registered_at",), "2026-10-15T09:00:00"), "time zone"),
             (change(("code_hash",), "x"), "code_hash must be a SHA-256"),
             (change(("dataset", "id"), "x"), "dataset id"),
             (change(("dataset", "tickers"), ["A", "B", "SPY"]), "lack IEF"),
+            (change(("dataset", "tickers"), ["A", "A", "B", "IEF", "SPY"]), "tickers must be distinct"),
+            (change(("plan",), plan_to_dict(FixedWeightPlan(name="f", universe=("A", "B"), purpose="built_in_plan",
+                                                            weights=(("A", "0.5"), ("B", "0.5"))))),
+             "comparison portfolio cannot be registered"),
+            (change(("plan", "name"), "Trend_Fixture"), "lower-case letters, digits and underscores"),
+            (change(("neighbours", 1, "name"), "trend_fixture_3"), "need distinct names"),
+            (change(("neighbours", 0), plan_to_dict(replace(PARENT, name="trend_fixture_scaled",
+                                                            invested_fraction=D("0.9")))),
+             "more than their names and invested fraction"),
             (change(("neighbours",), example()["neighbours"][:1]), "at least two neighbours"),
             (change(("neighbours", 0), plan_to_dict(FixedWeightPlan(name="f", universe=("A",), weights=(("A", "1"),),
                                                                     purpose="built_in_plan"))),
@@ -111,17 +125,23 @@ class RegistrationTests(unittest.TestCase):
             (change(("neighbours", 0), plan_to_dict(PARENT)), "distinct built-in plans"),
             (change(("plan", "decision_offset"), 1), "without a decision offset"),
             (change(("neighbours", 1, "purpose"), "engineering_fixture"), "distinct built-in plans"),
-            (change(("rebalance_shifts",), [0]), "nonzero sessions"),
-            (change(("rebalance_shifts",), [3]), "nonzero sessions from -2 to 2"),
-            (change(("rebalance_shifts",), [2, 2]), "distinct nonzero sessions"),
+            (change(("rebalance_shifts",), [0]), "shifts must be -2 and 2 sessions"),
+            (change(("rebalance_shifts",), [-3, 3]), "shifts must be -2 and 2 sessions"),
+            (change(("rebalance_shifts",), [2, 2]), "shifts must be -2 and 2 sessions"),
+            (change(("rebalance_shifts",), [2]), "shifts must be -2 and 2 sessions"),
+            (change(("period", "start"), "2024-W05-3"), "YYYY-MM-DD date"),  # An ISO week date.
             (change(("period", "end"), "2024-01-31"), "start before it ends"),
             (change(("publication", "date"), "2027-01-01"), "must not follow the period end"),
             (change(("segments", 0, "end"), "2024-01-01"), "segment must start before"),
-            (change(("costs_bps",), ["25", "50"]), "include the primary cost"),
+            (change(("segments",), example()["segments"] * 2), "segment names must be distinct"),
+            (change(("costs_bps",), ["25", "50"]), "the standard's 10, 25 and 50 bps"),
+            (change(("costs_bps",), "102550"), "costs must be a list"),
+            (change(("primary_cost_bps",), "25"), "primary cost must be 10 bps"),
             (change(("costs_bps",), [10.5, 25]), "floor must be decimal strings"),  # Floats are not exact.
             (change(("costs_bps",), ["ten"]), "floor must be decimal strings"),
-            (change(("costs_bps",), ["10", "10", "50"]), "distinct and nonnegative"),
-            (change(("costs_bps",), ["10", "-5"]), "distinct and nonnegative"),
+            (change(("costs_bps",), ["10", "10", "50"]), "the standard's 10, 25 and 50 bps"),
+            (change(("costs_bps",), ["10", "10", "25", "50"]), "the standard's 10, 25 and 50 bps"),
+            (change(("costs_bps",), ["10", "-25", "50"]), "the standard's 10, 25 and 50 bps"),
             (change(("initial_cash",), "0"), "initial cash must be positive"),
             (change(("trials", "historical_floor"), "-0.1"), "floor nonnegative"),
             (change(("primary_reference",), "tbills"), "primary reference must be one of"),
@@ -129,21 +149,38 @@ class RegistrationTests(unittest.TestCase):
             (change(("bootstrap", "block_lengths"), [5, 5]), "distinct"),
             (change(("bootstrap", "block_lengths"), []), "distinct"),
             (change(("bootstrap", "block_lengths"), [0, 5]), "block length must be an integer of at least 1"),
+            (change(("bootstrap", "block_lengths"), [[5]]), "block length must be an integer of at least 1"),
             (change(("bootstrap", "seed"), -1), "seed must be an integer of at least 0"),
             (change(("trials", "this_study"), 3), "parent, its neighbours and its shifts"),
             (change(("trials", "cumulative"), 4), "cumulative trial count must be an integer of at least 5"),
             (change(("trials", "per_role"), 51), "per-role trial count cannot exceed"),
+            (change(("trials", "per_role"), 4), "per-role trial count must be an integer of at least 5"),
+            (change(("trials", "historical_floor"), DELETE), "trials must have exactly the fields"),
             (change(("sources",), []), "at least one parameter source"),
             (change(("departures", 0, "reason"), " "), "departure reason must be nonempty"),
             (change(("cross_check",), {"decision": "x"}), "cross-check must have exactly"),
             (change(("disclosures",), "text"), "disclosures must be a list"),
             (change(("earlier_studies",), [{"study": "x"}]), "earlier study must have exactly"),
+            (change(("earlier_studies",), [{"study": "x", "runs": "local\\x\\runs\\plan-10bps"}]),
+             "forward slashes"),
         ]
         for apply, message in cases:
             payload = deepcopy(example())
             apply(payload)
             with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
                 parse_registration(payload)
+
+    def test_a_primary_cost_written_as_10_0_keeps_the_ladder_s_spelling(self):
+        registration = parse_registration({**example(), "primary_cost_bps": "10.0"})
+        self.assertEqual(format(registration.primary_cost_bps, "f"), "10")  # So the run keys agree.
+
+    def test_the_hash_ignores_layout_and_key_order(self):
+        payload = example()
+        with TemporaryDirectory() as directory:
+            compact, spread = Path(directory) / "a.json", Path(directory) / "b.json"
+            compact.write_text(json.dumps(payload, separators=(",", ":")))
+            spread.write_text(json.dumps(dict(reversed(list(payload.items()))), indent=4))
+            self.assertEqual(load_registration(compact).hash, load_registration(spread).hash)
 
     def test_the_file_must_be_json(self):
         with TemporaryDirectory() as directory:

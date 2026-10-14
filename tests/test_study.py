@@ -1,15 +1,18 @@
 """Registered studies on a synthetic dataset: the planned runs, their settings and every refusal."""
 
 from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import StringIO
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
-from quant_core.data import Bar, DataMetadata, Security, Snapshot
+from quant_core.data import Bar, DataMetadata, Dividend, Security, Snapshot
 from quant_core.data.dataset import Dataset, save_dataset
 from quant_core.data.rates import CashRateSeries
 from quant_core.provenance import code_hash, content_hash
@@ -66,6 +69,20 @@ KEYS = ("plan-10bps", "plan-25bps", "plan-50bps", "plan-10bps-delay2", "plan-10b
 
 
 class PlannedRunTests(unittest.TestCase):
+    def test_run_keys_are_unique(self):
+        twice = replace(REGISTRATION, neighbours=(REGISTRATION.neighbours[0],) * 2)  # Past the registration's check.
+        with self.assertRaisesRegex(ValueError, "keys must be unique"):
+            planned_runs(twice)
+
+    def test_the_first_decision_and_the_etfs_lacking_history_then(self):
+        def decision(month, asset, *reasons):
+            return SimpleNamespace(session=date(2024, month, 28), security_id=asset, reason_codes=reasons)
+        result = SimpleNamespace(signal_decisions=[decision(2, "B", "insufficient_history"), decision(1, "A"),
+                                                   decision(1, "C", "insufficient_history")])
+        self.assertEqual(study.first_decision(result), (date(2024, 1, 28), frozenset({"C"})))  # Not B, a month on.
+        with self.assertRaisesRegex(ValueError, "no decision"):
+            study.first_decision(SimpleNamespace(signal_decisions=()))
+
     def test_every_declared_run_in_a_fixed_order(self):
         runs = planned_runs(REGISTRATION)
         self.assertEqual(tuple(run.key for run in runs), KEYS)
@@ -75,7 +92,8 @@ class PlannedRunTests(unittest.TestCase):
         self.assertEqual(by_key["shift-2-10bps"].source.name, "trend_fixture_shift_minus_2")
         self.assertEqual(by_key["sixty_forty-25bps"].source.weights, (("IEF", D("0.4")), ("SPY", D("0.6"))))
         self.assertEqual(by_key["equal_weight-10bps"].source.universe, ("A", "B"))
-        self.assertIsNone(by_key["tbills-50bps"].source)
+        self.assertEqual((by_key["tbills-50bps"].source.family, by_key["tbills-50bps"].source.purpose),
+                         ("cash", "benchmark"))
         self.assertEqual({run.role for run in runs},
                          {"plan", "delay", "cash0", "shift", "neighbour", "reference", "reference_cash0"})
 
@@ -115,14 +133,38 @@ class RunStudyTests(unittest.TestCase):
         self.assertEqual(choices("plan-10bps"), choices("plan-10bps-cash0"))  # Decisions ignore idle-cash interest.
         sessions = {key: self.results[key].manifest.source.decision_sessions for key in ("plan-10bps", "shift+2-10bps")}
         self.assertNotEqual(sessions["plan-10bps"], sessions["shift+2-10bps"])
+        planned = {run.key: run for run in planned_runs(REGISTRATION)}
+        for key in ("shift-2-10bps", "shift+2-10bps"):  # Only the name and the decision offset change.
+            self.assertEqual(replace(planned[key].source, name="trend_fixture", decision_offset=0), REGISTRATION.plan)
+
+    def test_each_shift_copy_keeps_its_first_month(self):
+        def first_decision(key):
+            return min(d.session for d in self.results[key].signal_decisions)
+        self.assertEqual(first_decision("plan-10bps"), date(2022, 9, 28))
+        self.assertEqual(first_decision("shift+2-10bps"), date(2022, 10, 20))  # Two sessions after September's end.
+        self.assertEqual(first_decision("shift-2-10bps"), date(2022, 9, 10))  # Two before: the run starts there.
+        self.assertEqual(self.results["shift-2-10bps"].equity[0].session, date(2022, 9, 10))
 
     def test_comparison_portfolios_hold_what_their_names_say(self):
         self.assertEqual(self.results["tbills-10bps"].fills, ())
         self.assertGreater(self.results["tbills-10bps"].equity[-1].interest_income, 0)
-        self.assertEqual({f.side for f in self.results["spy_buy_hold-10bps"].fills}, {"buy"})
-        self.assertEqual(len(self.results["spy_buy_hold-10bps"].fills), 1)
+        spy = self.results["spy_buy_hold-10bps"].signal_decisions
+        self.assertEqual({(d.security_id, d.target_fraction) for d in spy}, {("SPY", D("0.95"))})  # Every month.
         self.assertEqual({f.security_id for f in self.results["sixty_forty-10bps"].fills}, {"IEF", "SPY"})
+        self.assertEqual({(d.security_id, d.target_fraction) for d in self.results["sixty_forty-10bps"].signal_decisions
+                          if d.session == date(2022, 9, 28)}, {("IEF", D("0.38")), ("SPY", D("0.57"))})
+        self.assertEqual(self.results["tbills-10bps"].manifest.source.purpose, "benchmark")
         self.assertEqual({f.security_id for f in self.results["equal_weight-10bps"].fills}, {"A", "B"})
+
+
+class DividendTests(unittest.TestCase):
+    def test_the_spy_reference_reinvests_its_dividends(self):
+        dataset = synthetic_dataset()
+        paid = replace(dataset, snapshot=replace(dataset.snapshot, actions=(
+            Dividend("SPY", date(2023, 3, 10), "8", date(2023, 3, 20)),)))
+        planned = {run.key: run for run in planned_runs(REGISTRATION)}
+        last = study._run(planned["spy_buy_hold-10bps"], REGISTRATION, paid).equity[-1]
+        self.assertLess(last.cash / last.equity, D("0.06"))  # Bought once and held, cash would be 11.5%.
 
 
 class BillsTests(unittest.TestCase):
@@ -146,9 +188,25 @@ class RefusalTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "check out the registration's tag"):
                 run_study(other, synthetic_dataset(), Path(directory) / "b")
             Path(directory, "c").mkdir()
-            with self.assertRaisesRegex(ValueError, "runs once"):
+            with self.assertRaisesRegex(ValueError, "runs once"), patch.object(study, "simulate_study") as simulate:
                 run_study(REGISTRATION, synthetic_dataset(), Path(directory) / "c")
+            simulate.assert_not_called()  # Refused before minutes of runs.
             self.assertEqual(sorted(p.name for p in Path(directory).iterdir()), ["c"])  # Nothing else was written.
+
+    def test_every_run_must_succeed_before_anything_is_saved(self):
+        late = parse_registration(study_payload(neighbours=[trend("trend_fixture_3", 3),
+                                                            trend("trend_fixture_12", 12)]))
+        tickers = ["A", "B", "C", "IEF", "SPY"]  # C is not in the dataset.
+        lacking = parse_registration(study_payload(dataset={"id": "c" * 64, "tickers": tickers}))
+        between = parse_registration(study_payload(period={"start": "2022-09-28", "end": "2024-05-27"}))
+        for registration, message in ((late, "inside a warmup: at the first decision trend_fixture_12 and the parent "
+                                             "differ in which ETFs have enough history \\(A, B\\)"),
+                                      (lacking, "lacks registered tickers: C"),
+                                      (between, "Run boundaries must be supplied calendar sessions")):
+            with self.subTest(message=message), TemporaryDirectory() as directory:
+                with self.assertRaisesRegex(ValueError, message):
+                    run_study(registration, synthetic_dataset(), Path(directory) / "study")
+                self.assertEqual(list(Path(directory).iterdir()), [])
 
 
 def saved_dataset(directory):
@@ -193,34 +251,53 @@ class StudyCommandTests(unittest.TestCase):
         self.assertEqual((code, err), (0, ""))
         summary = json.loads(out)
         pack = json.loads((output / "pack.json").read_text(encoding="utf-8"))
-        self.assertEqual((summary["status"], summary["pack_hash"]), ("complete", content_hash(pack)))
+        self.assertEqual((summary["status"], summary["pack_content_hash"]), ("complete", content_hash(pack)))
         self.assertEqual(pack["registration"]["hash"], summary["registration_hash"])
         self.assertTrue((output / "PACK.md").read_text(encoding="utf-8").startswith("# Evidence pack: trend-fixture"))
         self.assertEqual(len(list((output / "runs").iterdir())), 25)
-        code, out, err = command("run", self.registration, "--dataset", self.root / "dataset", "--output", output)
+        with patch("quant_core.validation.study_cli.simulate_study") as simulate:
+            code, out, err = command("run", self.registration, "--dataset", self.root / "dataset", "--output", output)
+        simulate.assert_not_called()
         self.assertEqual((code, out), (2, ""))
         self.assertIn("runs once", err)
 
     def test_an_earlier_study_is_read_from_its_saved_primary_run(self):
         first = self.root / "first"
         self.assertEqual(command("run", self.registration, "--dataset", self.root / "dataset", "--output", first)[0], 0)
-        earlier = [{"study": "trend-fixture", "runs": str(first / "runs" / "plan-10bps")}]
+        earlier = [{"study": "trend-fixture", "runs": (first / "runs" / "plan-10bps").as_posix()}]
         second = self.register("trend-fixture-two", earlier_studies=earlier)
         code, _, err = command("run", second, "--dataset", self.root / "dataset", "--output", self.root / "second")
         self.assertEqual((code, err), (0, ""))
         overlap = json.loads((self.root / "second" / "pack.json").read_text(encoding="utf-8"))["overlap"]
         self.assertEqual(overlap["trend-fixture"]["correlation"], "1")  # The same plan on the same data.
+        runs = json.loads((first / "pack.json").read_text(encoding="utf-8"))["reproduction"]["runs"]
+        self.assertEqual(overlap["trend-fixture"]["run_hash"], runs["plan-10bps"])
+        for other in ("plan-50bps", "plan-10bps-cash0", "plan-10bps-delay2", "shift+2-10bps", "sixty_forty-10bps"):
+            with self.subTest(other=other):
+                wrong = self.register(f"trend-fixture-{other.replace('+', 'p').replace('_', '-').lower()}",
+                                      earlier_studies=[{"study": "trend-fixture",
+                                                        "runs": (first / "runs" / other).as_posix()}])
+                code, _, err = command("check", wrong, "--dataset", self.root / "dataset")
+                self.assertEqual(code, 2)
+                self.assertIn("is not a parent's primary run", err)
 
     def test_refusals_come_before_any_run(self):
         missing = self.register("trend-fixture-three",
-                                earlier_studies=[{"study": "trend-fixture", "runs": str(self.root / "none")}])
+                                earlier_studies=[{"study": "trend-fixture", "runs": (self.root / "none").as_posix()}])
         other = self.register("trend-fixture-four", code_hash="e" * 64)
-        for registration, message in ((missing, "Earlier study trend-fixture: "), (other, "registration's tag")):
+        late = self.register("trend-fixture-five",
+                             neighbours=[trend("trend_fixture_3", 3), trend("trend_fixture_12", 12)])
+        idle = self.register("trend-fixture-six", neighbours=[trend("trend_fixture_3", 3), plan_to_dict(TrendPlan(
+            name="trend_fixture_idle", universe=("A", "B"), average_months=2, volume_lookback=2,
+            max_volume_participation="0.0000001"))])  # Every order rounds to zero shares.
+        for registration, message in ((missing, "Earlier study trend-fixture: "), (other, "registration's tag"),
+                                      (late, "inside a warmup"),
+                                      (idle, "trend_fixture_idle at 10 bps: .*the study's own V needs")):
             for name, extra in (("check", ()), ("run", ("--output", self.root / "never"))):
                 with self.subTest(message=message, command=name):
                     code, out, err = command(name, registration, "--dataset", self.root / "dataset", *extra)
                     self.assertEqual((code, out), (2, ""))
-                    self.assertIn(message, err)
+                    self.assertRegex(err, message)
                     self.assertFalse((self.root / "never").exists())
 
 

@@ -13,12 +13,15 @@ from quant_core.analytics.evidence import (
     bootstrap, correlation, deflated, holdings_overlap, periods, results, run_series,
 )
 from quant_core.provenance import content_hash, primitive
+from quant_core.strategies import StrategyConfig
 from quant_core.strategies.plans import EqualWeightPlan, FixedWeightPlan, plan_to_dict
-from quant_core.validation.study import planned_runs, references
+from quant_core.validation.statistics import return_moments
+from quant_core.validation.study import first_decision, planned_runs, references
 
 SCHEMA_VERSION = 1
 SENSITIVITY_ROLES = ("plan", "delay", "cash0", "shift", "neighbour")
 SENSITIVITY_FIELDS = ("cagr", "sharpe", "max_drawdown", "annual_turnover")
+INTERVAL_FIELDS = ("annualized_return_252", "sharpe", "max_drawdown")
 NOT_PROMISED = (
     "Past results do not promise future results; the plan can lose money, for years at a time.",
     "Results are before taxes and before account fees other than the modelled trading costs.",
@@ -59,7 +62,7 @@ def _label(planned, primary):
 
 def holds(source, result):
     """What a comparison portfolio holds, in words, so a reader can tell what was beaten or not."""
-    if source is None:
+    if isinstance(source, StrategyConfig) and source.family == "cash":
         return "Cash only, earning the 3-month Treasury rate"
     invested = source.invested_fraction
     with localcontext(CONTEXT):
@@ -78,7 +81,7 @@ def holds(source, result):
         picked = f"{counts[0]} at the first month end and {counts[-1]} at the last" if counts else "none"
         return (f"Equal weights over the plan's ETFs with enough history, {_percent(invested)} invested and "
                 f"rebalanced at each month end; ETFs chosen: {picked}")
-    return f"{', '.join(source.universe)} bought once with {_percent(invested)} of the capital and held; {cash} cash"
+    raise ValueError(f"No description for the comparison portfolio {source.name}")
 
 
 def limitations(registration, dataset, parent_periods):
@@ -97,9 +100,17 @@ def limitations(registration, dataset, parent_periods):
             "disclosures": list(registration.disclosures)}
 
 
+def _flag_outside(uncertainty, observed):
+    """Name, per block, each observed value outside its interval: resampling under-represents long falls."""
+    for row in uncertainty["blocks"].values():
+        row["observed_outside"] = [name for name in INTERVAL_FIELDS if observed[name] is not None
+                                   and None not in row[name] and not row[name][0] <= observed[name] <= row[name][1]]
+    return uncertainty
+
+
 def build_pack(registration, dataset, runs, earlier=None):
     """Every number of the pack from a study's runs, by key; `earlier` maps an earlier built-in's study name
-    to the RunSeries of its parent at its primary cost."""
+    to (the RunSeries of its parent at its primary cost, that run's result hash)."""
     primary = _bps(registration.primary_cost_bps)
     planned = {run.key: run for run in planned_runs(registration)}
     if set(runs) != set(planned):
@@ -110,6 +121,13 @@ def build_pack(registration, dataset, runs, earlier=None):
     neighbours = [series[f"neighbour-{n.name}-{primary}bps"] for n in registration.neighbours]
     if any(n.sessions != parent.sessions for n in neighbours):
         raise ValueError("The parent and its neighbours must cover the same sessions")
+    for name, run in zip((registration.plan.name,) + tuple(n.name for n in registration.neighbours),
+                         [parent] + neighbours):
+        try:
+            return_moments(run.excess)
+        except ValueError as exc:
+            raise ValueError(f"{name} at {primary} bps: {exc}; the study's own V needs a Sharpe ratio for the "
+                             "parent and every neighbour") from None
     costs = [_bps(cost) for cost in registration.costs_bps]
     comparison = {name: {"sharpe_difference": _difference(main["sharpe"], rows[f"{name}-{primary}bps"]["sharpe"]),
                          "cagr_difference": _difference(main["cagr"], rows[f"{name}-{primary}bps"]["cagr"]),
@@ -117,7 +135,13 @@ def build_pack(registration, dataset, runs, earlier=None):
                   for name in references(registration)}
     observed = {"annualized_return_252": return_metrics(parent.returns)["annualized_return_252"],
                 "sharpe": main["sharpe"], "max_drawdown": main["max_drawdown"]}
+    uncertainty = _flag_outside(bootstrap(parent, series[f"{registration.primary_reference}-{primary}bps"],
+                                          registration.block_lengths, registration.repetitions, registration.seed),
+                                observed)
     parent_periods = periods(parent, registration.publication, registration.segments)
+    start, lacking = first_decision(runs[f"plan-{primary}bps"])
+    configurations = {run.source.name: content_hash(run.source) for run in planned.values()
+                      if run.role in ("plan", "shift", "neighbour")}
     rates = dataset.rates
     return {
         "schema_version": SCHEMA_VERSION,
@@ -127,31 +151,31 @@ def build_pack(registration, dataset, runs, earlier=None):
                          "plan": plan_to_dict(registration.plan),
                          "primary_cost_bps": primary, "primary_reference": registration.primary_reference,
                          "trials": {"cumulative": registration.trials, "this_study": registration.trials_this_study,
-                                    "per_role": registration.trials_per_role}},
+                                    "per_role": registration.trials_per_role},
+                         "configuration_hashes": configurations, "file": registration.payload},
         "results": {cost: rows[f"plan-{cost}bps"] for cost in costs},
         "references": {name: {"holds": holds(source, runs[f"{name}-{primary}bps"]),
                               **{suffix: rows[f"{name}-{suffix}"] for suffix in
                                  [f"{cost}bps" for cost in costs] + [f"{primary}bps-cash0"]}}
                        for name, source in references(registration).items()},
         "comparison": comparison,
-        "uncertainty": {"observed": observed, "reference": registration.primary_reference,
-                        **bootstrap(parent, series[f"{registration.primary_reference}-{primary}bps"],
-                                    registration.block_lengths, registration.repetitions, registration.seed)},
+        "uncertainty": {"observed": observed, "reference": registration.primary_reference, **uncertainty},
         "deflated_sharpe": {**deflated(parent, neighbours, registration.trials, registration.historical_floor),
                             "per_role_trials": registration.trials_per_role},
+        "start": {"first_decision": start.isoformat(), "without_enough_history": sorted(lacking)},
         "periods": parent_periods,
         "sensitivity": {key: {"role": run.role, "label": _label(run, primary),
                               **{name: rows[key][name] for name in SENSITIVITY_FIELDS}}
                         for key, run in planned.items() if run.role in SENSITIVITY_ROLES},
         "cash": {"series": rates.series, "source": rates.source, "first": rates.observations[0][0].isoformat(),
                  "last": rates.observations[-1][0].isoformat(), "zero_cash": rows[f"plan-{primary}bps-cash0"]},
-        "overlap": {study: {"correlation": correlation(parent, other),
+        "overlap": {study: {"run_hash": run_hash, "correlation": correlation(parent, other),
                             "holdings_overlap": holdings_overlap(parent, other)}
-                    for study, other in sorted((earlier or {}).items())},
+                    for study, (other, run_hash) in sorted((earlier or {}).items())},
         "limitations": limitations(registration, dataset, parent_periods),
-        "reproduction": {"command": (f"python -m quant_core.validation.study_cli run docs/registrations/"
-                                     f"{registration.study}.json --dataset DATASET_DIRECTORY"
-                                     f" --output local/{registration.study}"),
+        "reproduction": {"command": (f"PYTHONPATH=python .venv/bin/python -m quant_core.validation.study_cli run "
+                                     f"docs/registrations/{registration.study}.json --dataset DATASET_DIRECTORY"
+                                     f" --output NEW_DIRECTORY"),
                          "tag": registration.tag, "registration_hash": registration.hash,
                          "dataset_id": registration.dataset_id, "code_hash": registration.code_hash,
                          "runs": {key: runs[key].result_hash for key in planned}},
@@ -171,6 +195,18 @@ def _pct(value):
         return "n/a"
     with localcontext(CONTEXT):
         return f"{_fixed(Decimal(value) * 100, 2)}%"
+
+
+def _probability(value):
+    """Four places, but never a rounded 1.0000 or 0.0000: a probability shown as certain overstates."""
+    text = _fixed(value, 4)
+    return {"1.0000": "> 0.9999", "0.0000": "< 0.0001"}.get(text, text)
+
+
+def _setting(value):
+    if isinstance(value, list):
+        return ", ".join(" ".join(map(str, item)) if isinstance(item, list) else str(item) for item in value)
+    return str(value)
 
 
 def _interval(pair, show):
@@ -206,14 +242,17 @@ def render_pack(pack):
              f"- Costs: slippage in basis points of each fill; primary {primary} bps; primary reference "
              f"{reference}", "",
              "Sharpe and Sortino ratios use daily returns over T-bills; volatility and drawdowns use daily "
-             "returns. Formulas: docs/VALIDATION.md, \"Evidence metrics\".", "", "## Results", ""]
+             "returns. Formulas: docs/VALIDATION.md, \"Evidence metrics\"."]
+    lines += _registration(registration["file"], registration["configuration_hashes"])
+    lines += ["", "## Results", ""]
     lines += _table(("Cost (bps)", "First session", "Last session", "CAGR", "Volatility", "Sharpe", "Sortino",
                      "Max drawdown", "Calmar", "Turnover a year", "Trades"),
                     [(cost, row["first_session"], row["last_session"], _pct(row["cagr"]), _pct(row["volatility"]),
                       _fixed(row["sharpe"], 2), _fixed(row["sortino"], 2), _pct(row["max_drawdown"]),
                       _fixed(row["calmar"], 2), _pct(row["annual_turnover"]), row["trades"])
                      for cost, row in pack["results"].items()])
-    lines += ["", "Turnover is the value traded in a year as a share of equity."]
+    lines += ["", "Turnover is the value bought and sold in a year, the first purchase included, as a share of "
+              "equity."]
     lines += [""] + _table(("Cost (bps)", "Average invested", "Longest underwater (sessions)",
                             "Whole-share shortfalls", "Opening-gap rejections", "Interest income (USD)"),
                            [(cost, _pct(row["average_gross_exposure"]), row["longest_underwater_sessions"],
@@ -241,14 +280,21 @@ def render_pack(pack):
               f"maximum drawdown {_pct(observed['max_drawdown'])}.", "",
               f"Stationary bootstrap, {uncertainty['repetitions']} repetitions, seed {uncertainty['seed']}; 95% "
               f"intervals at the nearest-rank 2.5th and 97.5th percentiles. The Sharpe difference resamples the "
-              f"same sessions of the plan and {uncertainty['reference']}.", ""]
+              f"same sessions of the plan and {uncertainty['reference']}.", "",
+              "Resampling breaks up stretches longer than a block, so long falls are under-represented: read the "
+              "drawdown interval next to the observed maximum drawdown, and the return interval next to the "
+              "annualized return over 252 sessions, not the CAGR. The last column names any observed value "
+              "outside its interval.", ""]
+    names = {"annualized_return_252": "annualized return", "sharpe": "Sharpe", "max_drawdown": "max drawdown"}
     lines += _table(("Mean block (sessions)", "Annualized return", "Sharpe", "Max drawdown",
-                     f"Sharpe minus {uncertainty['reference']}", "Replicates with a Sharpe"),
+                     f"Sharpe minus {uncertainty['reference']}", "Replicates with a Sharpe", "Observed outside"),
                     [(block, _interval(row["annualized_return_252"], _pct), _interval(row["sharpe"],
                       lambda value: _fixed(value, 2)), _interval(row["max_drawdown"], _pct),
                       "n/a" if row["sharpe_minus_reference"] is None
                       else _interval(row["sharpe_minus_reference"], lambda value: _fixed(value, 2)),
-                      row["defined_sharpe_replicates"]) for block, row in uncertainty["blocks"].items()])
+                      row["defined_sharpe_replicates"],
+                      ", ".join(names[name] for name in row["observed_outside"]) or "none")
+                     for block, row in uncertainty["blocks"].items()])
     deflation = pack["deflated_sharpe"]
     lines += ["", "## Deflated Sharpe ratio", "",
               f"Over {deflation['trials']} cumulative trials ({deflation['per_role_trials']} for this role). V is "
@@ -256,14 +302,17 @@ def render_pack(pack):
               "neighbours) or the historical floor. The primary figure uses the larger.", ""]
     lines += _table(("V", "Variance", "Expected maximum Sharpe (per session)", "z", "Deflated Sharpe ratio"),
                     [(name, _fixed(row["sharpe_variance"], 6), _fixed(row["expected_maximum_sharpe"], 4),
-                      _fixed(row["z"], 2), _fixed(row["deflated_sharpe_ratio"], 4))
+                      _fixed(row["z"], 2), _probability(row["deflated_sharpe_ratio"]))
                      for name, row in (("Primary (larger)", deflation["primary"]),
                                        ("Alternative (smaller)", deflation["alternative"]))])
     moments = deflation["primary"]
     lines += ["", f"This study's own V {_fixed(deflation['own_variance'], 6)}; historical floor "
               f"{_fixed(deflation['floor_variance'], 6)}. Per-session Sharpe {_fixed(moments['sharpe'], 4)} over "
               f"{moments['observations']} sessions, skewness {_fixed(moments['skewness'], 2)}, kurtosis "
-              f"{_fixed(moments['kurtosis'], 2)} (raw; normal is 3).", "", "## Periods", "", "### Calendar years", ""]
+              f"{_fixed(moments['kurtosis'], 2)} (raw; normal is 3).", "", "## Periods", "",
+              f"First decision {pack['start']['first_decision']}; ETFs without enough history then: "
+              f"{', '.join(pack['start']['without_enough_history']) or 'none'}. An ETF joins once it has the "
+              "history the rule needs.", "", "### Calendar years", ""]
     found = pack["periods"]
     lines += _table(period_header, _period_rows(found["calendar_years"].items()))
     lines += ["", "### Predeclared windows, since publication and segments", ""]
@@ -294,8 +343,8 @@ def render_pack(pack):
               f"idle cash at 0% and ratios against 0%: CAGR "
               f"{_pct(cash['zero_cash']['cagr'])}, Sharpe {_fixed(cash['zero_cash']['sharpe'], 2)}.", "",
               "## Overlap with earlier built-ins", ""]
-    lines += _table(("Study", "Correlation of daily excess returns", "Holdings overlap"),
-                    [(study, _fixed(row["correlation"], 2), _pct(row["holdings_overlap"]))
+    lines += _table(("Study", "Correlation of daily excess returns", "Holdings overlap", "Earlier run"),
+                    [(study, _fixed(row["correlation"], 2), _pct(row["holdings_overlap"]), f"`{row['run_hash']}`")
                      for study, row in pack["overlap"].items()]) if pack["overlap"] else ["No earlier built-in."]
     limits = pack["limitations"]
     data = limits["data"]
@@ -303,7 +352,7 @@ def render_pack(pack):
               f"Provider {data['provider']}, dataset `{data['dataset_id']}`. First session of each ETF:", ""]
     lines += _table(("ETF", "First session"), list(data["first_sessions"].items()))
     lines += ["", "Snapshot limitations:"] + _bullets(data["snapshot_limitations"], "None recorded.")
-    lines += ["", "Quality warnings:"] + _bullets([f"{code}: {count}" for code, count in
+    lines += ["", "Quality warnings across the whole dataset:"] + _bullets([f"{code}: {count}" for code, count in
                                                    sorted(data["quality_warnings"].items())], "None.")
     lines += ["", "### Losing calendar years", ""] + _bullets(
         [f"{year}: {_pct(value)}" for year, value in limits["losing_years"].items()], "None.")
@@ -314,12 +363,43 @@ def render_pack(pack):
     lines += ["", "### What the plan does not promise", ""] + _bullets(limits["not_promised"], "")
     lines += ["", "### Disclosures", ""] + _bullets(limits["disclosures"], "None.")
     reproduction = pack["reproduction"]
-    lines += ["", "## Reproduction", "", f"Check out `{reproduction['tag']}`, then:", "", "```",
+    lines += ["", "## Reproduction", "", f"Check out `{reproduction['tag']}`, then, with any directory that does "
+              "not exist yet as NEW_DIRECTORY:", "", "```",
               reproduction["command"], "```", "",
               f"Registration hash `{reproduction['registration_hash']}`, dataset ID `{reproduction['dataset_id']}`,"
               f" code hash `{reproduction['code_hash']}`. Result hash of each run:", ""]
     lines += _table(("Run", "Result hash"), [(key, f"`{value}`") for key, value in reproduction["runs"].items()])
     return "\n".join(lines) + "\n"
+
+
+def _registration(file, hashes):
+    """The registration section: everything fixed before the run, from the registration file itself."""
+    plan, period, publication = file["plan"], file["period"], file["publication"]
+    lines = ["", "## Registration", "",
+             f"Period {period['start']} to {period['end']}. The rule's source was first published "
+             f"{publication['date']}: {publication['source']}.", "", f"### Parent: {plan['name']}", ""]
+    lines += _table(("Setting", "Value"), [(key, _setting(value)) for key, value in plan.items() if key != "name"])
+    lines += ["", "### Neighbours", ""]
+    lines += _table(("Neighbour", "Settings that differ from the parent"),
+                    [(n["name"], "; ".join(f"{key} {_setting(value)}" for key, value in n.items()
+                                           if key != "name" and plan.get(key) != value) or "none")
+                     for n in file["neighbours"]])
+    lines += ["", f"Rebalance shifts: {', '.join(f'{shift:+d}' for shift in file['rebalance_shifts'])} sessions.",
+              "", "### Configuration hashes", ""]
+    lines += _table(("Configuration", "Hash"), [(name, f"`{digest}`") for name, digest in hashes.items()])
+    lines += ["", "### Parameter sources", ""]
+    lines += _table(("Parameter", "Source"), [(row["parameter"], row["source"]) for row in file["sources"]])
+    lines += ["", "### Departures from the sources", ""]
+    lines += _table(("What", "Reason"), [(row["what"], row["reason"]) for row in file["departures"]]) \
+        if file["departures"] else ["None."]
+    lines += ["", "### Segments", ""] + _bullets(
+        [f"{row['name']}: {row['start']} to {row['end']}" for row in file["segments"]], "None.")
+    lines += ["", "### Related ledger rows", ""] + _bullets(file["related_ledger_rows"], "None.")
+    lines += ["", "### Independent-provider cross-check", "",
+              f"{file['cross_check']['decision']}. Reason: {file['cross_check']['reason']}."]
+    lines += ["", "### Earlier studies", ""] + _bullets(
+        [f"{row['study']}: {row['runs']}" for row in file["earlier_studies"]], "None.")
+    return lines
 
 
 def write_pack(pack, directory):

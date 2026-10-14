@@ -5,7 +5,7 @@ The file is docs/registrations/<study>.json, committed and tagged before the run
 is the content hash of the file's JSON value.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal
 import json
@@ -19,6 +19,11 @@ from quant_core.strategies.plans import PlanConfig, plan_from_dict
 SCHEMA_VERSION = 1
 REFERENCES = ("spy_buy_hold", "sixty_forty", "equal_weight", "tbills")
 REFERENCE_TICKERS = ("IEF", "SPY")
+# The standard's roles (docs/STRATEGY_EVIDENCE.md, Section 1), its cost ladder and its rebalance-day shifts.
+ROLES = ("Cross-asset trend following", "Tactical equity/bond allocation", "Equity sector rotation, always invested",
+         "Diversified defensive allocation", "Model-ranked multi-asset rotation")
+COSTS_BPS, PRIMARY_COST_BPS, SHIFTS = (Decimal(10), Decimal(25), Decimal(50)), Decimal(10), (-2, 2)
+COMPARISON_RULES = ("fixed_weight", "equal_weight")
 FIELDS = frozenset((
     "schema_version", "study", "role", "tag", "registered_at", "code_hash", "dataset", "plan", "neighbours",
     "rebalance_shifts", "period", "publication", "segments", "costs_bps", "primary_cost_bps", "initial_cash",
@@ -26,6 +31,8 @@ FIELDS = frozenset((
     "disclosures", "earlier_studies"))
 _HEX = re.compile(r"[0-9a-f]{64}")
 _STUDY = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+_NAME = re.compile(r"[a-z0-9_]+")  # Run directories: no case-only differences, nothing Windows refuses.
+_DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 @dataclass(frozen=True)
@@ -81,7 +88,7 @@ def _record(value, name, keys):
 
 def _day(value, name):
     try:
-        if not isinstance(value, str) or len(value) != 10:
+        if not isinstance(value, str) or _DAY.fullmatch(value) is None:
             raise ValueError
         return date.fromisoformat(value)
     except ValueError:
@@ -102,15 +109,24 @@ def parse_registration(payload) -> Registration:
     study = _text(payload["study"], "study")
     if _STUDY.fullmatch(study) is None:
         raise ValueError("Registration study must be lower-case words joined by hyphens")
-    tag = _text(payload["tag"], "tag")
-    if re.fullmatch(re.escape(f"study/{study}-") + r"\d{4}-\d{2}-\d{2}", tag) is None:
-        raise ValueError("Registration tag must be study/<study>-<YYYY-MM-DD>")
+    if payload["role"] not in ROLES:
+        raise ValueError(f"Registration role must be one of the standard's roles: {'; '.join(ROLES)}")
     try:
         registered_at = datetime.fromisoformat(_text(payload["registered_at"], "registered_at"))
     except ValueError:
         raise ValueError("Registration registered_at must be an ISO time") from None
     if registered_at.utcoffset() is None:
         raise ValueError("Registration registered_at must include its time zone")
+    tag = _text(payload["tag"], "tag")
+    prefix = f"study/{study}-"
+    if not tag.startswith(prefix):
+        raise ValueError("Registration tag must be study/<study>-<YYYY-MM-DD>")
+    try:
+        tagged = _day(tag[len(prefix):], "tag date")
+    except ValueError:
+        raise ValueError("Registration tag must be study/<study>-<YYYY-MM-DD>") from None
+    if tagged != registered_at.date():
+        raise ValueError("Registration tag date must be the registration date")
     if not isinstance(payload["code_hash"], str) or _HEX.fullmatch(payload["code_hash"]) is None:
         raise ValueError("Registration code_hash must be a SHA-256 hex digest")
     dataset = _record(payload["dataset"], "dataset", ("id", "tickers"))
@@ -119,7 +135,11 @@ def parse_registration(payload) -> Registration:
     tickers = _texts(dataset["tickers"], "dataset tickers", 1)
     for ticker in tickers:
         identity(ticker)
+    if len(set(tickers)) != len(tickers):
+        raise ValueError("Registration dataset tickers must be distinct")
     plan = plan_from_dict(payload["plan"])
+    if plan.RULE in COMPARISON_RULES:
+        raise ValueError("A comparison portfolio cannot be registered as a built-in plan")
     if not isinstance(payload["neighbours"], list):
         raise ValueError("Registration neighbours must be a list")
     neighbours = tuple(plan_from_dict(values) for values in payload["neighbours"])
@@ -129,13 +149,20 @@ def parse_registration(payload) -> Registration:
     if (any(c.purpose != "built_in_plan" or c.decision_offset != 0 for c in configurations)
             or len(set(configurations)) != len(configurations)):
         raise ValueError("The parent and its neighbours must be distinct built-in plans without a decision offset")
+    if any(_NAME.fullmatch(c.name) is None for c in configurations):
+        raise ValueError("Plan names must be lower-case letters, digits and underscores")
+    if len({c.name for c in configurations}) != len(configurations):
+        raise ValueError("The parent and its neighbours need distinct names")
+    rules = {replace(c, name=plan.name, invested_fraction=plan.invested_fraction) for c in configurations}
+    if len(rules) != len(configurations):  # Section 4: pure exposure scaling is not a trial.
+        raise ValueError("The parent and its neighbours must differ in more than their names and invested fraction")
     needed = set(REFERENCE_TICKERS).union(*(c.universe for c in configurations))
     if not needed <= set(tickers):
         raise ValueError(f"Registration dataset tickers lack {', '.join(sorted(needed - set(tickers)))}")
     shifts = payload["rebalance_shifts"]
-    if (not isinstance(shifts, list) or any(type(s) is not int or s == 0 or not -2 <= s <= 2 for s in shifts)
-            or len(set(shifts)) != len(shifts)):
-        raise ValueError("Registration rebalance shifts must be distinct nonzero sessions from -2 to 2")
+    if not isinstance(shifts, list) or any(type(s) is not int for s in shifts) or sorted(shifts) != list(SHIFTS):
+        raise ValueError("Registration rebalance shifts must be -2 and 2 sessions")
+    shifts = SHIFTS
     period = _record(payload["period"], "period", ("start", "end"))
     start, end = _day(period["start"], "period start"), _day(period["end"], "period end")
     if start >= end:
@@ -148,6 +175,9 @@ def parse_registration(payload) -> Registration:
     if not isinstance(payload["segments"], list):
         raise ValueError("Registration segments must be a list")
     segments = []
+    if len({values.get("name") if isinstance(values, dict) else None for values in payload["segments"]}) != len(
+            payload["segments"]):
+        raise ValueError("Registration segment names must be distinct")
     for values in payload["segments"]:
         values = _record(values, "segment", ("name", "start", "end"))
         segment = (_text(values["name"], "segment name"), _day(values["start"], "segment start"),
@@ -155,31 +185,38 @@ def parse_registration(payload) -> Registration:
         if segment[1] > segment[2]:
             raise ValueError("Registration segment must start before it ends")
         segments.append(segment)
+    trials = _record(payload["trials"], "trials", ("cumulative", "this_study", "per_role", "historical_floor"))
+    if not isinstance(payload["costs_bps"], list):
+        raise ValueError("Registration costs must be a list")
     try:
         costs = tuple(number(value) for value in payload["costs_bps"])
         primary_cost, initial_cash = number(payload["primary_cost_bps"]), number(payload["initial_cash"])
-        floor = number(_record(payload["trials"], "trials",
-                               ("cumulative", "this_study", "per_role", "historical_floor"))["historical_floor"])
+        floor = number(trials["historical_floor"])
     except (TypeError, ValueError):
         raise ValueError("Registration costs, initial cash and floor must be decimal strings") from None
-    if not costs or len(set(costs)) != len(costs) or any(c < 0 for c in costs) or primary_cost not in costs:
-        raise ValueError("Registration costs must be distinct and nonnegative and include the primary cost")
+    if len(costs) != len(COSTS_BPS) or sorted(costs) != list(COSTS_BPS):
+        raise ValueError("Registration costs must be the standard's 10, 25 and 50 bps")
+    if primary_cost != PRIMARY_COST_BPS:
+        raise ValueError("Registration primary cost must be 10 bps, where the standard computes V")
+    costs = tuple(sorted(costs))
+    primary_cost = next(cost for cost in costs if cost == primary_cost)  # As written, so run keys agree.
     if initial_cash <= 0 or floor < 0:
         raise ValueError("Registration initial cash must be positive and the floor nonnegative")
     if payload["primary_reference"] not in REFERENCES[:3]:
         raise ValueError(f"Registration primary reference must be one of {', '.join(REFERENCES[:3])}")
     bootstrap = _record(payload["bootstrap"], "bootstrap", ("block_lengths", "repetitions", "seed"))
     blocks = bootstrap["block_lengths"]
-    if not isinstance(blocks, list) or not blocks or len(set(blocks)) != len(blocks):
-        raise ValueError("Registration bootstrap block lengths must be distinct")
+    if not isinstance(blocks, list) or not blocks:
+        raise ValueError("Registration bootstrap block lengths must be a nonempty list of distinct integers")
     blocks = tuple(_count(b, "bootstrap block length", 1) for b in blocks)
+    if len(set(blocks)) != len(blocks):
+        raise ValueError("Registration bootstrap block lengths must be a nonempty list of distinct integers")
     repetitions, seed = _count(bootstrap["repetitions"], "repetitions", 100), _count(bootstrap["seed"], "seed")
-    trials = payload["trials"]
     this_study = _count(trials["this_study"], "this study's trial count", 1)
     if this_study != len(configurations) + len(shifts):
         raise ValueError("This study's trial count must be the parent, its neighbours and its shifts")
     cumulative = _count(trials["cumulative"], "cumulative trial count", this_study)
-    per_role = _count(trials["per_role"], "per-role trial count", 1)
+    per_role = _count(trials["per_role"], "per-role trial count", this_study)  # Like N, it includes this study.
     if per_role > cumulative:
         raise ValueError("The per-role trial count cannot exceed the cumulative count")
     if not isinstance(payload["sources"], list) or not payload["sources"]:
@@ -204,8 +241,10 @@ def parse_registration(payload) -> Registration:
     for values in payload["earlier_studies"]:
         values = _record(values, "earlier study", ("study", "runs"))
         earlier.append((_text(values["study"], "earlier study"), _text(values["runs"], "earlier study runs")))
+        if "\\" in values["runs"]:
+            raise ValueError("Earlier study runs must be written with forward slashes, which work everywhere")
     return Registration(
-        study, _text(payload["role"], "role"), tag, registered_at, payload["code_hash"], dataset["id"], tickers,
+        study, payload["role"], tag, registered_at, payload["code_hash"], dataset["id"], tickers,
         plan, neighbours, tuple(shifts), start, end, published, tuple(segments), costs, primary_cost,
         initial_cash, payload["primary_reference"], blocks, repetitions, seed, cumulative, this_study, per_role,
         floor, _texts(payload["disclosures"], "disclosures"), tuple(earlier), content_hash(payload), payload)

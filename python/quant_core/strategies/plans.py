@@ -276,9 +276,12 @@ def plan_to_dict(plan):
 def plan_from_dict(values):
     rules = {cls.RULE: cls for cls in (TrendPlan, DualMomentumPlan, SectorRotationPlan, InverseVolatilityPlan,
                                        FixedWeightPlan, EqualWeightPlan)}
-    if not isinstance(values, dict) or values.get("rule") not in rules:
+    if not isinstance(values, dict) or not isinstance(values.get("rule"), str) or values["rule"] not in rules:
         raise ValueError("Unknown plan rule")
     fields = {key: value for key, value in values.items() if key != "rule"}
+    for key in ("universe", "weights"):
+        if key in fields and not isinstance(fields[key], list):
+            raise ValueError(f"Plan {key} must be a list")
     try:
         return rules[values["rule"]](**fields)
     except TypeError as exc:
