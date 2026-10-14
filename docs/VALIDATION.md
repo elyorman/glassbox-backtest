@@ -98,16 +98,20 @@ places. Packs show and compare four. Tests reproduce the paper's example
   2016–2019, 2020–2022 and 2023 to the end, since publication and any
   registered segments (each with the return, maximum drawdown and Sharpe over
   T-bills of its own sessions); the best and worst returns between month-end
-  sessions twelve months apart; the five deepest drawdowns with peak, trough
-  and recovery sessions, depth, and sessions to trough and to recovery (a peak
-  of initial capital has no peak session).
+  sessions twelve calendar months apart (the series' last month counts as
+  unfinished); the five deepest drawdowns with peak, trough and recovery
+  sessions, depth, and sessions to trough and to recovery, both counted from
+  the peak (a peak of initial capital has no peak session).
 - `bootstrap(series, reference, block_lengths, repetitions, seed)`: for each
   block length the stationary bootstrap above, restarted at the seed. Each
   replicate gives the 252-session annualized return, Sharpe over T-bills, the
   resampled path's maximum drawdown and, with a reference on the same
   sessions resampled with the same indices, the Sharpe difference. Intervals
   are the nearest-rank 2.5% and 97.5% values; undefined Sharpe replicates are
-  counted, not used.
+  counted, not used. Read the return interval next to the 252-session
+  annualized return, not the calendar CAGR, and the drawdown interval next to
+  the observed drawdown: resampling breaks dependence longer than the block,
+  so long bear markets are under-represented in it.
 - `deflated(parent, neighbours, trials, floor)`: the study's own V (sample
   variance of the daily Sharpe ratios of the parent and at least two
   neighbours) and the deflated Sharpe ratio under the larger of V and the

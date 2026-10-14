@@ -19,7 +19,11 @@ from quant_core.validation.statistics import (
 )
 
 ZERO, ONE = Decimal(0), Decimal(1)
-GAP_REJECTIONS = ("insufficient_cash", "insufficient_cash_for_fees")
+# Equity carries 28 significant digits, so cash minus cash leaves noise near 1e-28; excess returns keep 20
+# decimal places and an all-cash stretch is exactly zero over T-bills.
+EXCESS_PLACES = Decimal("1e-20")
+# Buys refused at the open for want of cash: an opening gap, or the cash a rejected sale did not raise.
+GAP_REJECTIONS = ("insufficient_cash",)
 # The evidence standard's predeclared windows; the last runs to the end of the data.
 WINDOWS = (("2016-2019", date(2016, 1, 1), date(2019, 12, 31)), ("2020-2022", date(2020, 1, 1), date(2022, 12, 31)),
            ("2023-end", date(2023, 1, 1), date.max))
@@ -46,7 +50,7 @@ def run_series(result) -> RunSeries:
         for index, state in enumerate(states):
             bills = rates.accrual(ONE, states[index - 1].session, state.session) if index and rates else ZERO
             returns.append(state.session_return)
-            excess.append(state.session_return - bills)
+            excess.append((state.session_return - bills).quantize(EXCESS_PLACES))
             weights.append(tuple(sorted((p.security_id, p.market_value / state.equity) for p in state.positions))
                            if state.equity > 0 else ())
     return RunSeries(tuple(s.session for s in states), tuple(returns), tuple(excess),
@@ -66,8 +70,8 @@ def results(result) -> dict:
             "calmar": summary["calmar"], "longest_underwater_sessions": raw["longest_underwater_sessions"],
             "average_gross_exposure": summary["average_gross_exposure"],
             "annual_turnover": summary["notional_turnover"] / years, "trades": len(round_trips(result)),
-            "whole_share_shortfalls": sum(1 for d in result.signal_decisions
-                                          if d.selected and "below_one_share" in d.reason_codes),
+            "whole_share_shortfalls": sum(1 for d in result.signal_decisions  # Selected, budget buys no share.
+                                          if d.selected and d.target_quantity == 0),
             "opening_gap_rejections": sum(1 for o in result.orders
                                           if o.status == "rejected" and o.reason_code in GAP_REJECTIONS),
             "interest_income": summary["interest_income"],
@@ -93,17 +97,22 @@ def calendar_years(series):
 
 
 def twelve_month_extremes(series):
-    """Best and worst returns between month-end sessions twelve months apart; None with fewer than 13 months."""
+    """Best and worst returns between month-end sessions twelve calendar months apart; None if there are none.
+
+    The series' last calendar month counts as unfinished, as `rebalance_dates` treats it, so no window ends on
+    a session that may not be its month's last.
+    """
     month_ends = {}
     for index, day in enumerate(series.sessions):
         month_ends[(day.year, day.month)] = index
-    keys = sorted(month_ends)
+    if month_ends:
+        del month_ends[max(month_ends)]
     rows = []
     with localcontext(CONTEXT):
-        for first, last in zip(keys, keys[12:]):
-            if (last[0] - first[0]) * 12 + last[1] - first[1] != 12:
-                continue  # A month without sessions would stretch the window.
-            a, b = month_ends[first], month_ends[last]
+        for (year, month), a in sorted(month_ends.items()):
+            b = month_ends.get((year + 1, month))
+            if b is None:
+                continue
             rows.append({"start": series.sessions[a].isoformat(), "end": series.sessions[b].isoformat(),
                          "return": series.equity[b] / series.equity[a] - ONE})
     if not rows:
@@ -114,8 +123,9 @@ def twelve_month_extremes(series):
 def drawdowns(series, count=5):
     """The `count` deepest falls below a previous peak (initial capital counts), deepest first.
 
-    A fall ends when equity regains its peak; a peak of initial capital that no
-    session closed at has no peak session, and sessions are counted from the start.
+    A fall ends when equity regains its peak; sessions to trough and to recovery are
+    both counted from the peak. A peak of initial capital that no session closed at
+    has no peak session, and its sessions are counted from the start.
     """
     episodes, peak, peak_index, trough, falling = [], series.initial_cash, None, None, False
     for index, value in enumerate(series.equity):

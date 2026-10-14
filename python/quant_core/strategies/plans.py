@@ -232,6 +232,7 @@ class FixedWeightPlan(PlanConfig):
     """A comparison portfolio with constant target weights; a skipped ETF's weight stays in cash."""
     RULE: ClassVar[str] = "fixed_weight"
     weights: tuple[tuple[str, Decimal], ...]
+    purpose: str = "benchmark"
 
     def __post_init__(self):
         super().__post_init__()
@@ -254,6 +255,7 @@ class FixedWeightPlan(PlanConfig):
 class EqualWeightPlan(PlanConfig):
     """A comparison portfolio with equal weights over the ETFs that pass the data checks at each decision."""
     RULE: ClassVar[str] = "equal_weight"
+    purpose: str = "benchmark"
 
     def samples(self, asset):
         return 1

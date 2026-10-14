@@ -29,6 +29,9 @@ class FixedWeightTests(unittest.TestCase):
                         (("A", "0.6"), ("C", "0.4"))):
             with self.subTest(weights=weights), self.assertRaisesRegex(ValueError, "Fixed weights must"):
                 FixedWeightPlan(name="f", universe=("A", "B"), weights=weights)
+        partial = FixedWeightPlan(name="f", universe=("A", "B"), weights=(("A", "0.5"), ("B", "0.3")))
+        self.assertEqual((partial.weights, partial.purpose), ((("A", D("0.5")), ("B", D("0.3"))), "benchmark"))
+        self.assertEqual(EqualWeightPlan(name="e", universe=("A",)).purpose, "benchmark")
 
     def test_sixty_forty_rebalances_monthly_through_the_engine(self):
         plan = fixture(FixedWeightPlan, universe=("A", "B"), weights=(("A", "0.6"), ("B", "0.4")))

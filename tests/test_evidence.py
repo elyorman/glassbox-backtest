@@ -33,12 +33,25 @@ class RunSeriesTests(unittest.TestCase):
         series = run_series(simulate(cash_rates=rates()))
         # 36.5% a year is 0.1% a calendar day: 1, 30, 1, 28, 1, 30 and 1 days between the sessions.
         bills = (0, D("0.001"), D("0.030"), D("0.001"), D("0.028"), D("0.001"), D("0.030"), D("0.001"))
-        self.assertEqual(series.excess, tuple(r - c for r, c in zip(series.returns, bills)))
+        self.assertEqual(series.excess, tuple((r - c).quantize(D("1e-20")) for r, c in zip(series.returns, bills)))
         self.assertEqual((series.sessions, series.initial_cash), (DAYS, 1000))
         self.assertEqual(series.weights[0], ())
         self.assertEqual(series.weights[1], (("A", D(400) / series.equity[1]),))  # 40 shares at $10.
         plain = run_series(simulate())
-        self.assertEqual(plain.excess, plain.returns)  # Without a rate series, cash earns nothing.
+        self.assertEqual(plain.excess, tuple(r.quantize(D("1e-20")) for r in plain.returns))  # Cash earns nothing.
+
+    def test_the_rate_is_the_one_observed_before_the_interval_starts(self):
+        # From Feb 28 the rate doubles to 0.2% a day; Feb 28 to Mar 27 still earns Feb 27's rate.
+        series = run_series(simulate(cash_rates=rates(changed_from=DAYS[3], changed_rate="0.73")))
+        bills = (0, D("0.001"), D("0.030"), D("0.001"), D("0.028"), D("0.002"), D("0.060"), D("0.002"))
+        self.assertEqual(series.excess, tuple((r - c).quantize(D("1e-20")) for r, c in zip(series.returns, bills)))
+
+    def test_cash_alone_has_no_sharpe_over_t_bills(self):
+        result = run_backtest(DATA, OrderSchedule(()), RunConfig("123457", FREE, ("A",), cash_rates=rates("0.05")))
+        row = results(result)
+        self.assertEqual(set(run_series(result).excess), {0})  # Not the engine's rounding noise.
+        self.assertEqual((row["sharpe"], row["sortino"]), (None, None))
+        self.assertGreater(row["interest_income"], 0)
 
 
 class ResultsTests(unittest.TestCase):
@@ -65,8 +78,10 @@ class ResultsTests(unittest.TestCase):
         self.assertGreater(with_bills["interest_income"], 0)
         raw, excess = return_metrics(series.returns), return_metrics(series.excess)
         self.assertEqual((with_bills["sortino"], with_bills["max_drawdown"]), (excess["sortino"], raw["max_drawdown"]))
-        self.assertNotEqual(excess["sortino"], raw["sortino"])  # So the two sources can be told apart.
-        self.assertNotEqual(excess["max_drawdown"], raw["max_drawdown"])
+        self.assertEqual((with_bills["volatility"], with_bills["longest_underwater_sessions"]),
+                         (raw["volatility"], raw["longest_underwater_sessions"]))
+        for name in ("sortino", "max_drawdown", "volatility"):  # So the two sources can be told apart.
+            self.assertNotEqual(excess[name], raw[name], name)
 
     def test_selected_lines_too_small_for_one_share_are_counted(self):
         plan = fixture(TrendPlan, universe=("A", "B"), average_months=2)
@@ -74,6 +89,9 @@ class ResultsTests(unittest.TestCase):
         result = run_backtest(data, build_plan(data, plan, None, FREE), RunConfig("20", FREE, plan.universe))
         # A quarter of $20 buys no $12 share of A in February or $21 share of B in March.
         self.assertEqual(results(result)["whole_share_shortfalls"], 2)
+        capped = fixture(TrendPlan, universe=("A", "B"), average_months=2, max_volume_participation="0.00001")
+        result = run_backtest(data, build_plan(data, capped, None, FREE), RunConfig("1000", FREE, plan.universe))
+        self.assertEqual(results(result)["whole_share_shortfalls"], 0)  # The budget buys shares; the cap blocks them.
 
 
 def series(days, equity, excess=None, initial="100"):
@@ -94,6 +112,12 @@ class PeriodTests(unittest.TestCase):
                           "return": D("-0.01"), "max_drawdown": D("0.1"),  # 0.9 x 1.1, from the year's start.
                           "sharpe": period(self.SERIES, date(2024, 1, 1), date(2024, 12, 31))["sharpe"]})
         self.assertIsNone(period(self.SERIES, date(2025, 1, 1), date(2025, 12, 31)))
+        self.assertEqual(period(self.SERIES, date(2024, 1, 2), date(2024, 1, 2))["sessions"], 1)  # Both ends count.
+
+    def test_a_year_that_starts_below_an_earlier_peak_is_measured_from_its_own_start(self):
+        days = (date(2023, 12, 27), date(2023, 12, 28), date(2023, 12, 29), date(2024, 1, 2), date(2024, 1, 3))
+        years = calendar_years(series(days, ("100", "130", "120", "110", "125")))
+        self.assertEqual(years["2024"]["max_drawdown"], 1 - D(110) / 120)  # From 120, not from 2023's 130.
         flat = series(self.DAYS, ("100", "100", "100", "100"))
         self.assertIsNone(period(flat, date(2023, 1, 1), date(2024, 12, 31))["sharpe"])  # No variance.
 
@@ -116,6 +140,8 @@ class PeriodTests(unittest.TestCase):
         self.assertEqual({name: row["sessions"] for name, row in sections["windows"].items()},
                          {"2016-2019": 1, "2020-2022": 1, "2023-end": 2})
         self.assertEqual(sections["since_publication"]["first_session"], "2020-01-02")
+        on_session = periods(series(days, ("100", "110", "121", "133.1")), publication=date(2020, 1, 2))
+        self.assertEqual(on_session["since_publication"]["sessions"], 3)
         self.assertEqual(sections["segments"]["early"]["return"], D("0.1"))  # 2019-12-31 and 2020-01-02.
         self.assertEqual(set(sections), {"calendar_years", "windows", "since_publication", "segments",
                                          "twelve_months", "drawdowns"})
@@ -123,15 +149,21 @@ class PeriodTests(unittest.TestCase):
 
 
 class TwelveMonthTests(unittest.TestCase):
+    DAYS = [date(2023, month, 28) for month in range(1, 13)] + [date(2024, 1, 31), date(2024, 2, 28),
+                                                               date(2024, 3, 1)]
+    EQUITY = ["100"] * 12 + ["120", "90", "90"]  # Jan to Jan: +20%; Feb to Feb: -10%. March is unfinished.
+
     def test_best_and_worst_twelve_months_between_month_ends(self):
-        days = [date(2023, month, 28) for month in range(1, 13)] + [date(2024, 1, 31), date(2024, 2, 28)]
-        equity = ["100"] * 12 + ["120", "90"]  # Jan to Jan: +20%; Feb to Feb: -10%.
-        extremes = twelve_month_extremes(series(days, equity))
+        extremes = twelve_month_extremes(series(self.DAYS, self.EQUITY))
         self.assertEqual(extremes["best"], {"start": "2023-01-28", "end": "2024-01-31", "return": D("0.2")})
         self.assertEqual(extremes["worst"], {"start": "2023-02-28", "end": "2024-02-28", "return": D("-0.1")})
-        self.assertIsNone(twelve_month_extremes(series(days[:12], equity[:12])))
-        gap = days[:5] + days[6:]  # Without June, the only pair left (Jan 2023, Feb 2024) is 13 months apart.
-        self.assertIsNone(twelve_month_extremes(series(gap, equity[:5] + equity[6:])))
+        self.assertIsNone(twelve_month_extremes(series(self.DAYS[:13], self.EQUITY[:13])))  # Jan 2024 unfinished.
+        self.assertIsNone(twelve_month_extremes(series(self.DAYS[:12], self.EQUITY[:12])))
+
+    def test_months_are_matched_by_the_calendar_not_by_position(self):
+        gap = self.DAYS[:5] + self.DAYS[6:]  # No June: Jan and Feb still have their twelve-month pairs.
+        extremes = twelve_month_extremes(series(gap, self.EQUITY[:5] + self.EQUITY[6:]))
+        self.assertEqual((extremes["best"]["return"], extremes["worst"]["return"]), (D("0.2"), D("-0.1")))
 
 
 class DrawdownTests(unittest.TestCase):
@@ -197,6 +229,21 @@ class BootstrapTests(unittest.TestCase):
             bootstrap(noisy, block_lengths=(41,), repetitions=100)
 
 
+    def test_resampled_paths_give_known_extremes(self):
+        days = (date(2024, 1, 1), date(2024, 1, 2))
+        two = series(days, ("110", "99"))  # +10% then -10%; one-session blocks draw each day independently.
+        block = bootstrap(two, block_lengths=(1,), repetitions=100, seed=0)["blocks"]["1"]
+        self.assertEqual(block["max_drawdown"], (0, D("0.19")))  # Up twice; down twice.
+        self.assertEqual(block["annualized_return_252"], (D("0.81") ** 126 - 1, D("1.21") ** 126 - 1))
+
+    def test_each_block_length_starts_again_at_the_seed(self):
+        days = [date(2024, 1, 1) + (date(2024, 1, 2) - date(2024, 1, 1)) * i for i in range(40)]
+        noisy = series(days, [str(100 + (i % 5) - 2 * (i % 3)) for i in range(40)])
+        both = bootstrap(noisy, noisy, block_lengths=(5, 20), repetitions=100, seed=3)
+        self.assertEqual(both["blocks"]["20"], bootstrap(noisy, noisy, block_lengths=(20,), repetitions=100,
+                                                         seed=3)["blocks"]["20"])
+
+
 class DeflatedTests(unittest.TestCase):
     def test_the_larger_variance_is_primary(self):
         days = [date(2024, 1, 1) + (date(2024, 1, 2) - date(2024, 1, 1)) * i for i in range(20)]
@@ -224,6 +271,10 @@ class OverlapTests(unittest.TestCase):
         self.assertAlmostEqual(correlation(a, mirror), -1, places=25)
         self.assertIsNone(correlation(a, series(self.DAYS, ("100",) * 4)))  # No variance.
         self.assertIsNone(correlation(a, series(self.DAYS[:1], ("100",))))
+        later = (date(2024, 1, 31), date(2024, 2, 28), date(2024, 2, 29), date(2024, 3, 1))
+        left = RunSeries(self.DAYS, (D(0),) * 4, (D(5), D(1), D(2), D(3)), (D(1),) * 4, ((),) * 4, D(1))
+        right = RunSeries(later, (D(0),) * 4, (D(1), D(2), D(3), D(0)), (D(1),) * 4, ((),) * 4, D(1))
+        self.assertAlmostEqual(correlation(left, right), 1, places=25)  # Jan 31 to Feb 29: 1, 2, 3 against 1, 2, 3.
 
     def test_holdings_overlap_at_shared_month_ends(self):
         def holding(*weights):
