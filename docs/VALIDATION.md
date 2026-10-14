@@ -86,14 +86,18 @@ places. Packs show and compare four. Tests reproduce the paper's example
 - `run_series(result)`: sessions, daily returns r, excess returns x = r − c
   (c is what one unit of idle cash earned over the same interval under the
   run's own rate series, zero without one), equity, and holdings as position
-  value over equity.
+  value over equity. x keeps 20 decimal places, so cash minus cash is exactly
+  zero rather than the engine's rounding noise near 1e-28; under the 0% cash
+  variant x is r at that precision.
 - `results(result)`: calendar CAGR; volatility (√252 × sample deviation of
   r); Sharpe and Sortino over T-bills (the formulas below applied to x);
   maximum drawdown and the longest underwater period (from r, with initial
   capital as the first peak); Calmar; average gross exposure; annual turnover
   (filled notional over equity per 365.2425 days); trades (`round_trips`);
-  whole-share shortfalls (selected lines marked `below_one_share`);
-  opening-gap rejections (orders rejected for insufficient cash); interest.
+  whole-share shortfalls (selected lines whose budget buys no whole share:
+  target zero shares, whether or not shares are held); opening-gap
+  rejections (buys rejected for insufficient cash at the open, including a
+  buy short because a same-session sale was rejected); interest.
 - `periods(series, publication, segments)`: each calendar year, the windows
   2016–2019, 2020–2022 and 2023 to the end, since publication and any
   registered segments (each with the return, maximum drawdown and Sharpe over

@@ -11,7 +11,7 @@ from quant_core.analytics.evidence import (
 )
 from quant_core.backtest import OrderSchedule, RunConfig, ScheduledOrder, run_backtest
 from quant_core.execution import OrderRequest
-from quant_core.strategies.plans import TrendPlan, build_plan
+from quant_core.strategies.plans import FixedWeightPlan, TrendPlan, build_plan
 from quant_core.validation.statistics import deflated_sharpe, return_moments, sharpe_variance
 from test_monthly_plans import DAYS, FREE, PRICES, fixture, rates, snapshot
 
@@ -93,6 +93,16 @@ class ResultsTests(unittest.TestCase):
         result = run_backtest(data, build_plan(data, capped, None, FREE), RunConfig("1000", FREE, plan.universe))
         self.assertEqual(results(result)["whole_share_shortfalls"], 0)  # The budget buys shares; the cap blocks them.
 
+    def test_a_held_line_sold_because_its_budget_buys_no_share_is_counted(self):
+        plan = fixture(FixedWeightPlan, universe=("A", "B"), weights=(("A", "0.6"), ("B", "0.4")))
+        data = snapshot({"A": (10, 10, 15, 20, 20, 20, 20, 20), "B": (20,) * 8})
+        result = run_backtest(data, build_plan(data, plan, None, FREE), RunConfig("40", FREE, plan.universe))
+        sold = [d for d in result.signal_decisions if d.action == "sell"]
+        # Jan 28: 30% of $40 buys one $10 A; B's $8 buys no $20 share. Feb 28: equity 45 buys no $20 A, so the
+        # A held is sold; B again none. Mar 28: neither. Five selected lines with a zero-share target.
+        self.assertEqual([(d.security_id, d.target_quantity) for d in sold], [("A", 0)])
+        self.assertEqual(results(result)["whole_share_shortfalls"], 5)
+
 
 def series(days, equity, excess=None, initial="100"):
     """A RunSeries from closing equity; each return is measured from the previous close (initial cash first)."""
@@ -113,13 +123,13 @@ class PeriodTests(unittest.TestCase):
                           "sharpe": period(self.SERIES, date(2024, 1, 1), date(2024, 12, 31))["sharpe"]})
         self.assertIsNone(period(self.SERIES, date(2025, 1, 1), date(2025, 12, 31)))
         self.assertEqual(period(self.SERIES, date(2024, 1, 2), date(2024, 1, 2))["sessions"], 1)  # Both ends count.
+        flat = series(self.DAYS, ("100", "100", "100", "100"))
+        self.assertIsNone(period(flat, date(2023, 1, 1), date(2024, 12, 31))["sharpe"])  # No variance.
 
     def test_a_year_that_starts_below_an_earlier_peak_is_measured_from_its_own_start(self):
         days = (date(2023, 12, 27), date(2023, 12, 28), date(2023, 12, 29), date(2024, 1, 2), date(2024, 1, 3))
         years = calendar_years(series(days, ("100", "130", "120", "110", "125")))
         self.assertEqual(years["2024"]["max_drawdown"], 1 - D(110) / 120)  # From 120, not from 2023's 130.
-        flat = series(self.DAYS, ("100", "100", "100", "100"))
-        self.assertIsNone(period(flat, date(2023, 1, 1), date(2024, 12, 31))["sharpe"])  # No variance.
 
     def test_the_sharpe_of_a_period_uses_excess_returns(self):
         days = (date(2023, 12, 27),) + self.DAYS[:2]
