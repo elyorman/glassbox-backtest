@@ -25,7 +25,7 @@ from quant_core.provenance import content_hash
 from quant_core.strategies import rebalance_dates, rebalance_order
 
 ZERO, ONE = Decimal(0), Decimal(1)
-PURPOSES = ("built_in_plan", "engineering_fixture")
+PURPOSES = ("built_in_plan", "benchmark", "engineering_fixture")
 
 
 def _count(value, name, minimum=1):
@@ -225,6 +225,43 @@ class InverseVolatilityPlan(PlanConfig):
                               ("inverse_volatility_weight" if asset in inverse else "zero_volatility",),
                               (("monthly_excess_volatility", volatility[asset]),))
                 for asset in values}
+
+
+@dataclass(frozen=True, kw_only=True)
+class FixedWeightPlan(PlanConfig):
+    """A comparison portfolio with constant target weights; a skipped ETF's weight stays in cash."""
+    RULE: ClassVar[str] = "fixed_weight"
+    weights: tuple[tuple[str, Decimal], ...]
+
+    def __post_init__(self):
+        super().__post_init__()
+        weights = tuple(sorted((asset, number(weight)) for asset, weight in self.weights))
+        if (tuple(asset for asset, _ in weights) != self.universe or any(weight <= 0 for _, weight in weights)
+                or sum((weight for _, weight in weights), ZERO) > 1):
+            raise ValueError("Fixed weights must be positive, one per universe security, and sum to at most 1")
+        object.__setattr__(self, "weights", weights)
+
+    def samples(self, asset):
+        return 1
+
+    def targets(self, values, bills=None):
+        self._check_values(values)
+        weights = dict(self.weights)
+        return {asset: Target(weights[asset], True, None, None, ("fixed_weight",)) for asset in values}
+
+
+@dataclass(frozen=True, kw_only=True)
+class EqualWeightPlan(PlanConfig):
+    """A comparison portfolio with equal weights over the ETFs that pass the data checks at each decision."""
+    RULE: ClassVar[str] = "equal_weight"
+
+    def samples(self, asset):
+        return 1
+
+    def targets(self, values, bills=None):
+        self._check_values(values)
+        share = ONE / len(values) if values else ZERO
+        return {asset: Target(share, True, None, None, ("equal_weight",)) for asset in values}
 
 
 def builtin_plans():
