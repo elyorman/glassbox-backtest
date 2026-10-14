@@ -21,7 +21,7 @@ from quant_core.data.adjustments import adjusted_quantity
 from quant_core.data.rates import CashRateSeries
 from quant_core.execution import ExecutionProfile, OrderRequest
 from quant_core.features import PRICE_POLICY, signal_prices
-from quant_core.provenance import content_hash
+from quant_core.provenance import content_hash, primitive
 from quant_core.strategies import rebalance_dates, rebalance_order
 
 ZERO, ONE = Decimal(0), Decimal(1)
@@ -264,6 +264,25 @@ class EqualWeightPlan(PlanConfig):
         self._check_values(values)
         share = ONE / len(values) if values else ZERO
         return {asset: Target(share, True, None, None, ("equal_weight",)) for asset in values}
+
+
+def plan_to_dict(plan):
+    """A plan configuration as plain JSON values, with its rule; `plan_from_dict` reverses it exactly."""
+    if not isinstance(plan, PlanConfig) or not plan.RULE:
+        raise ValueError("Only a plan configuration can be written")
+    return {"rule": plan.RULE, **primitive(plan)}
+
+
+def plan_from_dict(values):
+    rules = {cls.RULE: cls for cls in (TrendPlan, DualMomentumPlan, SectorRotationPlan, InverseVolatilityPlan,
+                                       FixedWeightPlan, EqualWeightPlan)}
+    if not isinstance(values, dict) or values.get("rule") not in rules:
+        raise ValueError("Unknown plan rule")
+    fields = {key: value for key, value in values.items() if key != "rule"}
+    try:
+        return rules[values["rule"]](**fields)
+    except TypeError as exc:
+        raise ValueError(f"Malformed plan configuration: {exc}") from None
 
 
 def builtin_plans():
