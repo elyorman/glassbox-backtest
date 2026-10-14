@@ -78,6 +78,47 @@ on the platform's maths library, so SR0 and DSR are rounded to 12 decimal
 places. Packs show and compare four. Tests reproduce the paper's example
 (SR0 ≈ 0.1132, DSR ≈ 0.9004).
 
+## Evidence metrics
+
+`quant_core.analytics.evidence` computes an evidence pack's numbers
+([the evidence standard](STRATEGY_EVIDENCE.md), Section 2) from one run.
+
+- `run_series(result)`: sessions, daily returns r, excess returns x = r − c
+  (c is what one unit of idle cash earned over the same interval under the
+  run's own rate series, zero without one), equity, and holdings as position
+  value over equity.
+- `results(result)`: calendar CAGR; volatility (√252 × sample deviation of
+  r); Sharpe and Sortino over T-bills (the formulas below applied to x);
+  maximum drawdown and the longest underwater period (from r, with initial
+  capital as the first peak); Calmar; average gross exposure; annual turnover
+  (filled notional over equity per 365.2425 days); trades (`round_trips`);
+  whole-share shortfalls (selected lines marked `below_one_share`);
+  opening-gap rejections (orders rejected for insufficient cash); interest.
+- `periods(series, publication, segments)`: each calendar year, the windows
+  2016–2019, 2020–2022 and 2023 to the end, since publication and any
+  registered segments (each with the return, maximum drawdown and Sharpe over
+  T-bills of its own sessions); the best and worst returns between month-end
+  sessions twelve months apart; the five deepest drawdowns with peak, trough
+  and recovery sessions, depth, and sessions to trough and to recovery (a peak
+  of initial capital has no peak session).
+- `bootstrap(series, reference, block_lengths, repetitions, seed)`: for each
+  block length the stationary bootstrap above, restarted at the seed. Each
+  replicate gives the 252-session annualized return, Sharpe over T-bills, the
+  resampled path's maximum drawdown and, with a reference on the same
+  sessions resampled with the same indices, the Sharpe difference. Intervals
+  are the nearest-rank 2.5% and 97.5% values; undefined Sharpe replicates are
+  counted, not used.
+- `deflated(parent, neighbours, trials, floor)`: the study's own V (sample
+  variance of the daily Sharpe ratios of the parent and at least two
+  neighbours) and the deflated Sharpe ratio under the larger of V and the
+  historical floor (primary) and under the smaller.
+- `correlation(a, b)` and `holdings_overlap(a, b)`: Pearson correlation of
+  daily excess returns on shared sessions, and the mean over shared month-end
+  sessions of the sum of min(weight in a, weight in b).
+
+Under the 0% cash variant c = 0, so the ratios are measured against a zero
+reference rate, as the standard's secondary variant requires.
+
 ## Frozen campaign and qualification contract
 
 `CampaignSpec` records the hypothesis, dataset hash, complete candidate and

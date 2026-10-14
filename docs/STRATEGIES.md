@@ -47,6 +47,12 @@ Grinblatt's six-month hold.
   `inverse_volatility_weight`), the numbers behind it, the target share of
   equity and the order. Orders come from `rebalance_order`, the whole-share
   arithmetic of the `scheduled_slots` profile below.
+- **Comparison portfolios.** `FixedWeightPlan(weights)` holds constant
+  weights, and a skipped ETF's weight stays in cash; the 60/40 reference is
+  SPY 0.6 and IEF 0.4. `EqualWeightPlan(universe)` splits equally over the ETFs
+  that pass the data checks at each decision. Both run on the same monthly
+  runner, invest 95% and carry the purpose `benchmark`; SPY buy-and-hold is
+  the `buy_hold` rule strategy at 95%.
 - **Limitations pages** also cite evidence after publication (no rule depends
   on it): Hurst, Ooi and Pedersen 2017 on trend following since 1880; Daniel
   and Moskowitz 2016 on momentum crashes; Anderson, Bianchi and Goldberg 2012
