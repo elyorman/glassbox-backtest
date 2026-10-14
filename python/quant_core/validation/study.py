@@ -79,12 +79,17 @@ def _run(planned, registration, dataset):
     return run_backtest(snapshot, source, config)
 
 
-def run_study(registration, dataset, output):
-    """Run and save every planned run; refuses another dataset, other code, or an existing output directory."""
+def check_study(registration, dataset):
+    """Refuse a dataset or code other than the registered ones."""
     if dataset.manifest.get("dataset_id") != registration.dataset_id:
         raise ValueError("The dataset is not the registered one")
     if code_hash() != registration.code_hash:
         raise ValueError("The code differs from the registered code; check out the registration's tag")
+
+
+def run_study(registration, dataset, output):
+    """Run and save every planned run; refuses another dataset, other code, or an existing output directory."""
+    check_study(registration, dataset)
     output = Path(output)
     if output.exists():
         raise ValueError(f"{output} already exists; a registered study runs once")

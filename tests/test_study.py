@@ -1,19 +1,23 @@
 """Registered studies on a synthetic dataset: the planned runs, their settings and every refusal."""
 
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from io import StringIO
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
 from quant_core.data import Bar, DataMetadata, Security, Snapshot
-from quant_core.data.dataset import Dataset
+from quant_core.data.dataset import Dataset, save_dataset
 from quant_core.data.rates import CashRateSeries
-from quant_core.provenance import code_hash
+from quant_core.provenance import code_hash, content_hash
 from quant_core.strategies.plans import DualMomentumPlan, TrendPlan, plan_to_dict
 from quant_core.validation import study
 from quant_core.validation.registration import parse_registration
 from quant_core.validation.study import planned_runs, run_study
+from quant_core.validation.study_cli import main
 from test_registration import example
 
 D = Decimal
@@ -145,6 +149,79 @@ class RefusalTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "runs once"):
                 run_study(REGISTRATION, synthetic_dataset(), Path(directory) / "c")
             self.assertEqual(sorted(p.name for p in Path(directory).iterdir()), ["c"])  # Nothing else was written.
+
+
+def saved_dataset(directory):
+    """The synthetic dataset saved with a manifest that `load_dataset` accepts; returns its ID."""
+    dataset = synthetic_dataset()
+    manifest = {"schema_version": 1, "snapshot": {"dataset_hash": dataset.snapshot.dataset_hash},
+                "rates": {"rates_hash": content_hash(dataset.rates)}}
+    manifest["dataset_id"] = content_hash(manifest)
+    return save_dataset(directory, Dataset(dataset.snapshot, dataset.rates, manifest))
+
+
+def command(*args):
+    out, err = StringIO(), StringIO()
+    with redirect_stdout(out), redirect_stderr(err):
+        code = main([str(arg) for arg in args])
+    return code, out.getvalue(), err.getvalue()
+
+
+class StudyCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = TemporaryDirectory()
+        self.root = Path(self.directory.name)
+        self.dataset_id = saved_dataset(self.root / "dataset")
+        self.registration = self.register("trend-fixture")
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def register(self, study, **changes):
+        path = self.root / f"{study}.json"
+        path.write_text(json.dumps(study_payload(
+            study=study, tag=f"study/{study}-2026-10-15",
+            dataset={"id": self.dataset_id, "tickers": ["A", "B", "IEF", "SPY"]}, **changes)))
+        return path
+
+    def test_check_runs_nothing_and_run_writes_the_pack_once(self):
+        code, out, err = command("check", self.registration, "--dataset", self.root / "dataset")
+        self.assertEqual((code, err, json.loads(out)["status"], json.loads(out)["planned_runs"]), (0, "", "ready", 25))
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["dataset", "trend-fixture.json"])
+        output = self.root / "study"
+        code, out, err = command("run", self.registration, "--dataset", self.root / "dataset", "--output", output)
+        self.assertEqual((code, err), (0, ""))
+        summary = json.loads(out)
+        pack = json.loads((output / "pack.json").read_text(encoding="utf-8"))
+        self.assertEqual((summary["status"], summary["pack_hash"]), ("complete", content_hash(pack)))
+        self.assertEqual(pack["registration"]["hash"], summary["registration_hash"])
+        self.assertTrue((output / "PACK.md").read_text(encoding="utf-8").startswith("# Evidence pack: trend-fixture"))
+        self.assertEqual(len(list((output / "runs").iterdir())), 25)
+        code, out, err = command("run", self.registration, "--dataset", self.root / "dataset", "--output", output)
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("runs once", err)
+
+    def test_an_earlier_study_is_read_from_its_saved_primary_run(self):
+        first = self.root / "first"
+        self.assertEqual(command("run", self.registration, "--dataset", self.root / "dataset", "--output", first)[0], 0)
+        earlier = [{"study": "trend-fixture", "runs": str(first / "runs" / "plan-10bps")}]
+        second = self.register("trend-fixture-two", earlier_studies=earlier)
+        code, _, err = command("run", second, "--dataset", self.root / "dataset", "--output", self.root / "second")
+        self.assertEqual((code, err), (0, ""))
+        overlap = json.loads((self.root / "second" / "pack.json").read_text(encoding="utf-8"))["overlap"]
+        self.assertEqual(overlap["trend-fixture"]["correlation"], "1")  # The same plan on the same data.
+
+    def test_refusals_come_before_any_run(self):
+        missing = self.register("trend-fixture-three",
+                                earlier_studies=[{"study": "trend-fixture", "runs": str(self.root / "none")}])
+        other = self.register("trend-fixture-four", code_hash="e" * 64)
+        for registration, message in ((missing, "Earlier study trend-fixture: "), (other, "registration's tag")):
+            for name, extra in (("check", ()), ("run", ("--output", self.root / "never"))):
+                with self.subTest(message=message, command=name):
+                    code, out, err = command(name, registration, "--dataset", self.root / "dataset", *extra)
+                    self.assertEqual((code, out), (2, ""))
+                    self.assertIn(message, err)
+                    self.assertFalse((self.root / "never").exists())
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
 """The evidence pack of the synthetic registered study: every section from the study's own runs."""
 
+from copy import deepcopy
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -12,7 +14,8 @@ from quant_core.analytics.evidence import (
     bootstrap, correlation, deflated, holdings_overlap, periods, results, run_series,
 )
 from quant_core.analytics import return_metrics
-from quant_core.reporting.evidence import NOT_PROMISED, build_pack, holds
+from quant_core.provenance import content_hash, primitive
+from quant_core.reporting.evidence import NOT_PROMISED, _fixed, _pct, build_pack, holds, render_pack, write_pack
 from quant_core.strategies.plans import EqualWeightPlan
 from quant_core.validation import study
 from quant_core.validation.study import run_study
@@ -135,6 +138,65 @@ class PackTests(unittest.TestCase):
             planned["neighbour-trend_fixture_3-10bps"], later, self.dataset)}
         with self.assertRaisesRegex(ValueError, "same sessions"):
             build_pack(REGISTRATION, self.dataset, shorter)
+
+
+class RenderTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with TemporaryDirectory() as directory:
+            cls.dataset = synthetic_dataset()
+            cls.runs = run_study(REGISTRATION, cls.dataset, Path(directory) / "study")
+        cls.pack = build_pack(REGISTRATION, cls.dataset, cls.runs)
+        cls.text = render_pack(cls.pack)
+
+    def test_numbers_are_rounded_half_even_without_negative_zero(self):
+        self.assertEqual((_fixed(D("0.125"), 2), _fixed(D("0.135"), 2), _fixed(D("-0.004"), 2)),
+                         ("0.12", "0.14", "0.00"))
+        self.assertEqual((_pct(D("0.123456")), _pct(D("-0.5")), _pct(None), _fixed(None, 2)),
+                         ("12.35%", "-50.00%", "n/a", "n/a"))
+
+    def test_sections_appear_in_order_with_the_pack_numbers(self):
+        headings = [line for line in self.text.splitlines() if line.startswith("## ")]
+        self.assertEqual(headings, ["## Results", "## Comparison portfolios", "## Uncertainty",
+                                    "## Deflated Sharpe ratio", "## Periods", "## Sensitivity", "## Cash",
+                                    "## Overlap with earlier built-ins", "## Limitations", "## Reproduction"])
+        row = self.pack["results"]["25"]
+        self.assertIn(f"| 25 | {row['first_session']} | {row['last_session']} | {_pct(row['cagr'])} | "
+                      f"{_pct(row['volatility'])} | {_fixed(row['sharpe'], 2)} |", self.text)
+        self.assertIn("| tbills | n/a | ", self.text)  # An undefined Sharpe difference.
+        self.assertIn("| tbills | 10bps-cash0 | 0.00% | n/a |", self.text)
+        self.assertEqual(self.pack["sensitivity"]["shift+2-10bps"]["label"],
+                         "Decisions +2 sessions from month end (10 bps)")
+        self.assertIn("| sixty_forty | Rebalanced at each month end to 57% SPY, 38% IEF and 5% cash |", self.text)
+        year = self.pack["periods"]["calendar_years"]["2023"]
+        self.assertIn(f"| 2023 | {year['first_session']} | {year['last_session']} | {year['sessions']} | "
+                      f"{_pct(year['return'])} | {_pct(year['max_drawdown'])} | {_fixed(year['sharpe'], 2)} |",
+                      self.text)
+        primary = self.pack["deflated_sharpe"]["primary"]
+        self.assertIn(f"| Primary (larger) | {_fixed(primary['sharpe_variance'], 6)} | ", self.text)
+        self.assertIn(f"| plan-10bps | `{self.pack['reproduction']['runs']['plan-10bps']}` |", self.text)
+        self.assertIn("No earlier built-in.", self.text)
+        self.assertIn(self.pack["reproduction"]["command"], self.text)
+        self.assertNotIn("-0.00", self.text)
+        for line in NOT_PROMISED:
+            self.assertIn(f"- {line}", self.text)
+
+    def test_missing_periods_say_so(self):
+        pack = deepcopy(self.pack)
+        pack["periods"]["twelve_months"], pack["periods"]["drawdowns"] = None, []
+        text = render_pack(pack)
+        self.assertIn("The run is shorter than twelve months.", text)
+        self.assertIn("| 2016-2019 | no sessions |", text)
+        self.assertIn("| None |", text)
+
+    def test_the_pack_is_written_once_as_json_and_markdown(self):
+        with TemporaryDirectory() as directory:
+            digest = write_pack(self.pack, directory)
+            saved = json.loads(Path(directory, "pack.json").read_text(encoding="utf-8"))
+            self.assertEqual((saved, digest), (primitive(self.pack), content_hash(self.pack)))
+            self.assertEqual(Path(directory, "PACK.md").read_bytes(), self.text.encode("utf-8"))  # No CRLF.
+            with self.assertRaises(FileExistsError):
+                write_pack(self.pack, directory)
 
 
 if __name__ == "__main__":
