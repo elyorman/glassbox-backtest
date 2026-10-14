@@ -2,15 +2,18 @@
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
 from quant_core.analytics import return_metrics, summarize_run
 from quant_core.analytics.evidence import (
     RunSeries, bootstrap, calendar_years, correlation, deflated, drawdowns, holdings_overlap, period, periods,
-    results, run_series, twelve_month_extremes,
+    results, run_series, run_series_from_bundle, twelve_month_extremes,
 )
 from quant_core.backtest import OrderSchedule, RunConfig, ScheduledOrder, run_backtest
 from quant_core.execution import OrderRequest
+from quant_core.reporting import save_run
 from quant_core.strategies.plans import FixedWeightPlan, TrendPlan, build_plan
 from quant_core.validation.statistics import deflated_sharpe, return_moments, sharpe_variance
 from test_monthly_plans import DAYS, FREE, PRICES, fixture, rates, snapshot
@@ -52,6 +55,17 @@ class RunSeriesTests(unittest.TestCase):
         self.assertEqual(set(run_series(result).excess), {0})  # Not the engine's rounding noise.
         self.assertEqual((row["sharpe"], row["sortino"]), (None, None))
         self.assertGreater(row["interest_income"], 0)
+
+
+    def test_a_saved_run_gives_the_same_series(self):
+        for settings in ({"cash_rates": rates(changed_from=DAYS[3], changed_rate="0.73")}, {}):
+            result = simulate(**settings)
+            with self.subTest(cash=bool(settings)), TemporaryDirectory() as directory:
+                save_run(result, Path(directory) / "run")
+                self.assertEqual(run_series_from_bundle(Path(directory) / "run"), run_series(result))
+                (Path(directory) / "run" / "equity.csv").write_text("tampered")
+                with self.assertRaisesRegex(ValueError, "integrity mismatch"):
+                    run_series_from_bundle(Path(directory) / "run")
 
 
 class ResultsTests(unittest.TestCase):

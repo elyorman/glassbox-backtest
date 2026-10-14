@@ -7,13 +7,16 @@ Formulas: docs/VALIDATION.md, "Evidence metrics".
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, localcontext
+from pathlib import Path
 from random import Random
 
 from quant_core.analytics import CONTEXT, mean, return_metrics, sharpe, summarize_run
 from quant_core.analytics.trades import round_trips
 from quant_core.data import number
+from quant_core.data.rates import CashRateSeries
+from quant_core.reporting import verify_run
 from quant_core.validation.statistics import (
     deflated_sharpe, percentile_interval, return_moments, sharpe_variance, stationary_indices,
 )
@@ -40,21 +43,39 @@ class RunSeries:
     initial_cash: Decimal
 
 
+def _series(sessions, returns, equity, holdings, rates, initial_cash):
+    if any(value is None for value in returns):
+        raise ValueError("Evidence needs a defined return for every session")
+    excess, weights = [], []
+    with localcontext(CONTEXT):
+        for index, (day, value, wealth, positions) in enumerate(zip(sessions, returns, equity, holdings)):
+            bills = rates.accrual(ONE, sessions[index - 1], day) if index and rates else ZERO
+            excess.append((value - bills).quantize(EXCESS_PLACES))
+            weights.append(tuple(sorted((asset, worth / wealth) for asset, worth in positions)) if wealth > 0 else ())
+    return RunSeries(tuple(sessions), tuple(returns), tuple(excess), tuple(equity), tuple(weights), initial_cash)
+
+
 def run_series(result) -> RunSeries:
     """Daily returns, returns over T-bills, equity and holdings of a completed run."""
-    rates, states = result.manifest.config.cash_rates, result.equity
-    if any(state.session_return is None for state in states):
-        raise ValueError("Evidence needs a defined return for every session")
-    returns, excess, weights = [], [], []
-    with localcontext(CONTEXT):
-        for index, state in enumerate(states):
-            bills = rates.accrual(ONE, states[index - 1].session, state.session) if index and rates else ZERO
-            returns.append(state.session_return)
-            excess.append((state.session_return - bills).quantize(EXCESS_PLACES))
-            weights.append(tuple(sorted((p.security_id, p.market_value / state.equity) for p in state.positions))
-                           if state.equity > 0 else ())
-    return RunSeries(tuple(s.session for s in states), tuple(returns), tuple(excess),
-                     tuple(s.equity for s in states), tuple(weights), result.summary.initial_cash)
+    states = result.equity
+    return _series(tuple(s.session for s in states), tuple(s.session_return for s in states),
+                   tuple(s.equity for s in states),
+                   tuple(tuple((p.security_id, p.market_value) for p in s.positions) for s in states),
+                   result.manifest.config.cash_rates, result.summary.initial_cash)
+
+
+def run_series_from_bundle(directory) -> RunSeries:
+    """The same series from a saved run, after the bundle's integrity check."""
+    payload = verify_run(Path(directory))
+    states, saved = payload["equity"], payload["manifest"]["config"]["cash_rates"]
+    rates = None if saved is None else CashRateSeries(
+        saved["source"], saved["series"], datetime.fromisoformat(saved["retrieved_at"]),
+        tuple((date.fromisoformat(day), rate) for day, rate in saved["observations"]))
+    return _series(tuple(date.fromisoformat(s["session"]) for s in states),
+                   tuple(None if s["session_return"] is None else number(s["session_return"]) for s in states),
+                   tuple(number(s["equity"]) for s in states),
+                   tuple(tuple((p["security_id"], number(p["market_value"])) for p in s["positions"]) for s in states),
+                   rates, number(payload["summary"]["initial_cash"]))
 
 
 def results(result) -> dict:
