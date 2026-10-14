@@ -9,9 +9,14 @@ Formulas: docs/VALIDATION.md, "Evidence metrics".
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, localcontext
+from random import Random
 
-from quant_core.analytics import CONTEXT, return_metrics, summarize_run
+from quant_core.analytics import CONTEXT, mean, return_metrics, sharpe, summarize_run
 from quant_core.analytics.trades import round_trips
+from quant_core.data import number
+from quant_core.validation.statistics import (
+    deflated_sharpe, percentile_interval, return_moments, sharpe_variance, stationary_indices,
+)
 
 ZERO, ONE = Decimal(0), Decimal(1)
 GAP_REJECTIONS = ("insufficient_cash", "insufficient_cash_for_fees")
@@ -145,3 +150,88 @@ def periods(series, publication=None, segments=()):
             "since_publication": period(series, publication, date.max) if publication is not None else None,
             "segments": {name: period(series, start, end) for name, start, end in segments},
             "twelve_months": twelve_month_extremes(series), "drawdowns": drawdowns(series)}
+
+
+def _max_drawdown(returns):
+    growth, peak, worst = ONE, ONE, ZERO
+    for value in returns:
+        growth *= ONE + value
+        peak = max(peak, growth)
+        worst = max(worst, ONE - growth / peak)
+    return worst
+
+
+def bootstrap(series, reference=None, block_lengths=(5, 20, 60), repetitions=500, seed=1729):
+    """Stationary-bootstrap 95% intervals of the 252-session annualized return, Sharpe over T-bills and worst
+    fall; with a reference run on the same sessions, of the Sharpe difference too, from the same indices.
+    Each block length starts the generator again at `seed`."""
+    if reference is not None and reference.sessions != series.sessions:
+        raise ValueError("A bootstrap reference must cover the same sessions")
+    if type(repetitions) is not int or repetitions < 100 or type(seed) is not int or seed < 0:
+        raise ValueError("Bootstrap requires >=100 repetitions and a nonnegative integer seed")
+    count, blocks = len(series.returns), {}
+    with localcontext(CONTEXT):
+        for block in block_lengths:
+            random, annual, ratios, falls, differences = Random(seed), [], [], [], []
+            for _ in range(repetitions):
+                indices = stationary_indices(count, block, random)
+                returns = tuple(series.returns[i] for i in indices)
+                growth = ONE
+                for value in returns:
+                    growth *= ONE + value
+                annual.append(growth ** (Decimal(252) / count) - ONE)
+                falls.append(_max_drawdown(returns))
+                ratio = sharpe(tuple(series.excess[i] for i in indices))
+                if ratio is not None:
+                    ratios.append(ratio)
+                    other = sharpe(tuple(reference.excess[i] for i in indices)) if reference is not None else None
+                    if other is not None:
+                        differences.append(ratio - other)
+            blocks[str(block)] = {
+                "annualized_return_252": percentile_interval(annual), "sharpe": percentile_interval(ratios),
+                "max_drawdown": percentile_interval(falls),
+                "sharpe_minus_reference": percentile_interval(differences) if reference is not None else None,
+                "defined_sharpe_replicates": len(ratios)}
+    return {"repetitions": repetitions, "seed": seed, "blocks": blocks}
+
+
+def deflated(parent, neighbours, trials, floor):
+    """The deflated Sharpe ratio of the parent's excess returns; V is the larger of the study's own variance
+    (parent and neighbours) and the historical floor, and the smaller gives the alternative."""
+    neighbours = tuple(neighbours)
+    if len(neighbours) < 2:
+        raise ValueError("The study's own V needs the parent and at least two neighbours")
+    own = sharpe_variance(tuple(return_moments(run.excess)["sharpe"] for run in (parent,) + neighbours))
+    floor = number(floor)
+    return {"trials": trials, "own_variance": own, "floor_variance": floor,
+            "primary": deflated_sharpe(parent.excess, trials, max(own, floor)),
+            "alternative": deflated_sharpe(parent.excess, trials, min(own, floor))}
+
+
+def correlation(a, b):
+    """Pearson correlation of daily excess returns on the sessions both runs share; None without variance."""
+    shared = sorted(set(a.sessions) & set(b.sessions))
+    left, right = dict(zip(a.sessions, a.excess)), dict(zip(b.sessions, b.excess))
+    x, y = tuple(left[day] for day in shared), tuple(right[day] for day in shared)
+    if len(shared) < 2:
+        return None
+    with localcontext(CONTEXT):
+        mx, my = mean(x), mean(y)
+        sxy = sum(((p - mx) * (q - my) for p, q in zip(x, y)), ZERO)
+        sxx, syy = sum(((p - mx) ** 2 for p in x), ZERO), sum(((q - my) ** 2 for q in y), ZERO)
+        return sxy / (sxx * syy).sqrt() if sxx and syy else None
+
+
+def holdings_overlap(a, b):
+    """Mean over the month-end sessions both runs share of the sum of min(weight in a, weight in b)."""
+    month_ends = {}
+    for day in sorted(set(a.sessions) & set(b.sessions)):
+        month_ends[(day.year, day.month)] = day
+    if not month_ends:
+        return None
+    left = {day: dict(weights) for day, weights in zip(a.sessions, a.weights)}
+    right = {day: dict(weights) for day, weights in zip(b.sessions, b.weights)}
+    with localcontext(CONTEXT):
+        overlaps = [sum((min(left[day].get(asset, ZERO), weight) for asset, weight in right[day].items()), ZERO)
+                    for day in month_ends.values()]
+        return sum(overlaps, ZERO) / len(overlaps)

@@ -6,11 +6,13 @@ import unittest
 
 from quant_core.analytics import return_metrics, summarize_run
 from quant_core.analytics.evidence import (
-    RunSeries, calendar_years, drawdowns, period, periods, results, run_series, twelve_month_extremes,
+    RunSeries, bootstrap, calendar_years, correlation, deflated, drawdowns, holdings_overlap, period, periods,
+    results, run_series, twelve_month_extremes,
 )
 from quant_core.backtest import OrderSchedule, RunConfig, ScheduledOrder, run_backtest
 from quant_core.execution import OrderRequest
 from quant_core.strategies.plans import TrendPlan, build_plan
+from quant_core.validation.statistics import deflated_sharpe, return_moments, sharpe_variance
 from test_monthly_plans import DAYS, FREE, PRICES, fixture, rates, snapshot
 
 D = Decimal
@@ -151,6 +153,88 @@ class DrawdownTests(unittest.TestCase):
         saw = ("99", "100", "98", "100", "97", "100", "96", "100", "95", "100", "94", "100", "93", "100")
         self.assertEqual([row["depth"] for row in drawdowns(series(days, saw))],
                          [D("0.07"), D("0.06"), D("0.05"), D("0.04"), D("0.03")])
+
+
+def steady(count, daily="0.001", excess=None):
+    days = [date(2024, 1, 1) + (date(2024, 1, 2) - date(2024, 1, 1)) * i for i in range(count)]
+    equity, value = [], D(100)
+    for _ in range(count):
+        value *= 1 + D(daily)
+        equity.append(value)
+    return series(days, equity, excess=excess)
+
+
+class BootstrapTests(unittest.TestCase):
+    def test_a_steady_series_has_a_known_answer_and_runs_repeat_exactly(self):
+        run = steady(30)
+        result = bootstrap(run, run, block_lengths=(5,), repetitions=100, seed=7)
+        block = result["blocks"]["5"]
+        low, high = block["annualized_return_252"]  # Every resample of a steady 0.1% a day is the same.
+        self.assertAlmostEqual(low, D("1.001") ** 252 - 1, places=20)
+        self.assertAlmostEqual(high, D("1.001") ** 252 - 1, places=20)
+        self.assertEqual(block["max_drawdown"], (0, 0))
+        self.assertEqual((block["sharpe"], block["defined_sharpe_replicates"]), ((None, None), 0))  # No variance.
+        self.assertEqual(bootstrap(run, run, block_lengths=(5,), repetitions=100, seed=7), result)
+        self.assertEqual((result["repetitions"], result["seed"]), (100, 7))
+
+    def test_the_reference_is_resampled_on_the_same_sessions(self):
+        days = [date(2024, 1, 1) + (date(2024, 1, 2) - date(2024, 1, 1)) * i for i in range(40)]
+        noisy = series(days, [str(100 + (i % 5) - 2 * (i % 3)) for i in range(40)])
+        result = bootstrap(noisy, noisy, block_lengths=(5, 20), repetitions=100, seed=1)
+        for block in ("5", "20"):
+            self.assertEqual(result["blocks"][block]["sharpe_minus_reference"], (0, 0))  # Itself: no difference.
+            low, high = result["blocks"][block]["sharpe"]
+            self.assertLess(low, high)
+        self.assertNotEqual(result["blocks"]["5"], bootstrap(noisy, noisy, block_lengths=(5,), repetitions=100,
+                                                             seed=2)["blocks"]["5"])
+        alone = bootstrap(noisy, block_lengths=(5,), repetitions=100)
+        self.assertIsNone(alone["blocks"]["5"]["sharpe_minus_reference"])
+        with self.assertRaisesRegex(ValueError, "same sessions"):
+            bootstrap(noisy, steady(39), block_lengths=(5,), repetitions=100)
+        with self.assertRaisesRegex(ValueError, ">=100 repetitions"):
+            bootstrap(noisy, repetitions=99)
+        with self.assertRaisesRegex(ValueError, "Block length"):
+            bootstrap(noisy, block_lengths=(41,), repetitions=100)
+
+
+class DeflatedTests(unittest.TestCase):
+    def test_the_larger_variance_is_primary(self):
+        days = [date(2024, 1, 1) + (date(2024, 1, 2) - date(2024, 1, 1)) * i for i in range(20)]
+        runs = [series(days, [str(100 + (i * k) % 7) for i in range(20)]) for k in (1, 2, 3)]
+        parent, neighbours = runs[0], runs[1:]
+        own = sharpe_variance([return_moments(run.excess)["sharpe"] for run in runs])
+        for floor in (own / 2, own * 2):
+            with self.subTest(floor=floor):
+                report = deflated(parent, neighbours, 50, floor)
+                self.assertEqual((report["own_variance"], report["floor_variance"], report["trials"]),
+                                 (own, floor, 50))
+                self.assertEqual(report["primary"], deflated_sharpe(parent.excess, 50, max(own, floor)))
+                self.assertEqual(report["alternative"], deflated_sharpe(parent.excess, 50, min(own, floor)))
+        with self.assertRaisesRegex(ValueError, "at least two neighbours"):
+            deflated(parent, neighbours[:1], 50, own)
+
+
+class OverlapTests(unittest.TestCase):
+    DAYS = (date(2024, 1, 30), date(2024, 1, 31), date(2024, 2, 28), date(2024, 2, 29))
+
+    def test_correlation_of_excess_returns_on_shared_sessions(self):
+        a = series(self.DAYS, ("100", "110", "99", "108.9"))
+        mirror = RunSeries(a.sessions, a.returns, tuple(-x for x in a.excess), a.equity, a.weights, a.initial_cash)
+        self.assertAlmostEqual(correlation(a, a), 1, places=25)
+        self.assertAlmostEqual(correlation(a, mirror), -1, places=25)
+        self.assertIsNone(correlation(a, series(self.DAYS, ("100",) * 4)))  # No variance.
+        self.assertIsNone(correlation(a, series(self.DAYS[:1], ("100",))))
+
+    def test_holdings_overlap_at_shared_month_ends(self):
+        def holding(*weights):
+            return RunSeries(self.DAYS, (D(0),) * 4, (D(0),) * 4, (D(100),) * 4,
+                             tuple(tuple((asset, D(w)) for asset, w in day) for day in weights), D(100))
+        a = holding((), (("A", "0.6"), ("B", "0.4")), (("A", "1"),), (("A", "0.5"), ("B", "0.5")))
+        b = holding((("A", "1"),), (("A", "0.5"), ("C", "0.5")), (), (("B", "0.95"),))
+        # Month ends Jan 31 and Feb 29: min(0.6, 0.5) = 0.5, then min(0.5, 0.95) = 0.5; Jan 30 and Feb 28 ignored.
+        self.assertEqual(holdings_overlap(a, b), D("0.5"))
+        later = RunSeries((date(2025, 1, 1),), (D(0),), (D(0),), (D(1),), ((),), D(1))
+        self.assertIsNone(holdings_overlap(a, later))  # No shared month end.
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ def _settings(length, block, repetitions, seed):
         raise ValueError("Block exceeds sample length")
 
 
-def _interval(values):
+def percentile_interval(values):
     values = sorted(values)
     # Declared nearest-rank 2.5% and 97.5% percentiles, no interpolation.
     return (values[max(0, (len(values) * 25 + 999) // 1000 - 1)],
@@ -52,7 +52,7 @@ def paired_bootstrap(candidate, benchmark, block=20, repetitions=500, seed=0):
             if metrics["sharpe_difference"] is not None:
                 differences.append(metrics["sharpe_difference"])
         return {"expected_block_sessions": block, "repetitions": repetitions, "seed": seed,
-                "mean_excess_95": _interval(excess), "sharpe_difference_95": _interval(differences),
+                "mean_excess_95": percentile_interval(excess), "sharpe_difference_95": percentile_interval(differences),
                 "defined_sharpe_replicates": len(differences)}
 
 
@@ -108,7 +108,8 @@ def fold_score_bootstrap(left, right, benchmark, fold_indices, block, repetition
             if len(left_scores) == len(folds):
                 differences.append(median(left_scores) - median(right_scores))
         return {"expected_block_sessions": block, "repetitions": repetitions, "seed": seed,
-                "median_fold_score_difference_95": _interval(differences), "defined_replicates": len(differences)}
+                "median_fold_score_difference_95": percentile_interval(differences),
+                "defined_replicates": len(differences)}
 
 
 def return_moments(returns):
