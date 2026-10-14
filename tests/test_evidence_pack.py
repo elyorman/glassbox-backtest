@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
+from hashlib import sha256
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -16,12 +17,14 @@ from quant_core.analytics.evidence import (
 from quant_core.analytics import return_metrics
 from quant_core.provenance import content_hash, primitive
 from quant_core.reporting.evidence import (
-    NOT_PROMISED, _fixed, _flag_outside, _pct, _probability, build_pack, holds, render_pack, write_pack,
+    NOT_PROMISED, _differences, _fixed, _flag_outside, _pct, _probability, build_pack, holds, pack_files, render_pack,
+    write_pack,
 )
 from quant_core.strategies.plans import EqualWeightPlan
+from quant_core.validation.registration import parse_registration
 from quant_core.validation import study
 from quant_core.validation.study import run_study
-from test_study import KEYS, REGISTRATION, synthetic_dataset
+from test_study import KEYS, REGISTRATION, study_payload, synthetic_dataset
 
 D = Decimal
 
@@ -48,8 +51,11 @@ class PackTests(unittest.TestCase):
                          {"trend_fixture", "trend_fixture_shift_minus_2", "trend_fixture_shift_plus_2",
                           "trend_fixture_3", "trend_fixture_4"})
         self.assertEqual(self.pack["registration"]["configuration_hashes"]["trend_fixture"],
-                         content_hash(REGISTRATION.plan))
-        self.assertEqual(self.pack["start"], {"first_decision": "2022-09-28", "without_enough_history": []})
+                         content_hash(REGISTRATION.payload["plan"]))  # The file's own entry, rule included.
+        self.assertEqual(self.pack["registration"]["neighbours"],
+                         {"trend_fixture_3": {"average_months": 3}, "trend_fixture_4": {"average_months": 4}})
+        self.assertEqual(self.pack["start"], {"first_decision": "2022-09-28", "without_enough_history": [],
+                                              "without_data": []})
         registration = self.pack["registration"]
         self.assertEqual((registration["study"], registration["hash"], registration["plan"]["average_months"]),
                          ("trend-fixture", REGISTRATION.hash, 2))
@@ -210,8 +216,9 @@ class RenderTests(unittest.TestCase):
                      "| Fills at the next open | The engine never fills on the signal bar |",
                      "- first year: 2022-09-28 to 2023-09-28", "- 2026-10-03 trend recipes",
                      "None for the tester round. Reason: Owner decision.",
-                     f"| trend_fixture | `{content_hash(REGISTRATION.plan)}` |",
-                     "First decision 2022-09-28; ETFs without enough history then: none.",
+                     f"| trend_fixture | `{content_hash(REGISTRATION.payload['plan'])}` |",
+                     "First decision 2022-09-28; ETFs without enough history then: none; without data then (not yet "
+                     "listed, or no bar that day): none.",
                      "long falls are under-represented"):
             self.assertIn(line, self.text)
 
@@ -241,19 +248,38 @@ class RenderTests(unittest.TestCase):
         pack["periods"]["twelve_months"], pack["periods"]["drawdowns"] = None, []
         pack["start"]["without_enough_history"] = ["A", "B"]
         text = render_pack(pack)
-        self.assertIn("ETFs without enough history then: A, B.", text)
+        self.assertIn("ETFs without enough history then: A, B;", text)
         self.assertIn("The run is shorter than twelve months.", text)
         self.assertIn("| 2016-2019 | no sessions |", text)
         self.assertIn("| None |", text)
 
     def test_the_pack_is_written_once_as_json_and_markdown(self):
         with TemporaryDirectory() as directory:
-            digest = write_pack(self.pack, directory)
-            saved = json.loads(Path(directory, "pack.json").read_text(encoding="utf-8"))
-            self.assertEqual((saved, digest), (primitive(self.pack), content_hash(self.pack)))
+            digest = write_pack(pack_files(self.pack), directory)
+            saved = Path(directory, "pack.json").read_bytes()
+            self.assertEqual((json.loads(saved), digest), (primitive(self.pack), sha256(saved).hexdigest()))
             self.assertEqual(Path(directory, "PACK.md").read_bytes(), self.text.encode("utf-8"))  # No CRLF.
             with self.assertRaises(FileExistsError):
-                write_pack(self.pack, directory)
+                write_pack(pack_files(self.pack), directory)
+
+    def test_neighbours_show_only_real_differences(self):
+        payload = study_payload()
+        payload["neighbours"][0] = {**payload["neighbours"][0], "universe": ["B", "A"], "invested_fraction": "0.950"}
+        registration = parse_registration(payload)  # The same universe and fraction, spelled differently.
+        self.assertEqual(_differences(registration.plan, registration.neighbours[0]), {"average_months": 3})
+        self.assertEqual(_differences(registration.plan, replace(registration.plan, universe=("A",))),
+                         {"universe": ["A"]})
+
+
+class LateListingTests(unittest.TestCase):
+    def test_an_etf_not_yet_listed_at_the_start_is_named(self):
+        dataset = synthetic_dataset(listed={"B": date(2023, 3, 10)})
+        with TemporaryDirectory() as directory:
+            pack = build_pack(REGISTRATION, dataset, run_study(REGISTRATION, dataset, Path(directory) / "study"))
+        self.assertEqual(pack["start"], {"first_decision": "2022-09-28", "without_enough_history": [],
+                                         "without_data": ["B"]})
+        self.assertEqual(pack["limitations"]["data"]["first_sessions"]["B"], "2023-03-10")
+        self.assertIn("without data then (not yet listed, or no bar that day): B.", render_pack(pack))
 
 
 if __name__ == "__main__":

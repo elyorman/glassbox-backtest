@@ -17,6 +17,7 @@ from quant_core.provenance import code_hash
 from quant_core.reporting import save_run
 from quant_core.strategies import StrategyConfig, build_strategy
 from quant_core.strategies.plans import EqualWeightPlan, FixedWeightPlan, PlanConfig, build_plan
+from quant_core.validation.registration import shift_name
 
 TBILLS = "tbills"
 
@@ -53,9 +54,8 @@ def planned_runs(registration):
     runs += [PlannedRun(f"plan-{_bps(primary)}bps-delay2", "delay", plan, primary, delay=2),
              PlannedRun(f"plan-{_bps(primary)}bps-cash0", "cash0", plan, primary, cash=False)]
     for shift in registration.rebalance_shifts:
-        name = f"{plan.name}_shift_{'plus' if shift > 0 else 'minus'}_{abs(shift)}"
         runs.append(PlannedRun(f"shift{shift:+d}-{_bps(primary)}bps", "shift",
-                               replace(plan, name=name, decision_offset=shift), primary))
+                               replace(plan, name=shift_name(plan.name, shift), decision_offset=shift), primary))
     runs += [PlannedRun(f"neighbour-{neighbour.name}-{_bps(primary)}bps", "neighbour", neighbour, primary)
              for neighbour in registration.neighbours]
     for name, source in references(registration).items():
@@ -101,32 +101,37 @@ def check_study(registration, dataset):
 
 
 def first_decision(result):
-    """A plan's first decision session and the ETFs without enough history then."""
+    """A plan's first decision session, the ETFs without enough history then, and the ETFs without data then
+    (not yet listed, or no bar that session)."""
     if not result.signal_decisions:
         raise ValueError("A plan makes no decision in the registered period")
     first = min(decision.session for decision in result.signal_decisions)
-    return first, frozenset(d.security_id for d in result.signal_decisions
-                            if d.session == first and "insufficient_history" in d.reason_codes)
+    at = [decision for decision in result.signal_decisions if decision.session == first]
+    return (first, frozenset(d.security_id for d in at if "insufficient_history" in d.reason_codes),
+            frozenset(d.security_id for d in at
+                      if {"outside_security_lifetime", "missing_signal_bar"} & set(d.reason_codes)))
 
 
 def simulate_study(registration, dataset):
     """Every planned run, in memory, after the dataset and code checks; nothing is saved or shown.
 
-    Refuses a start inside a warmup: the parent and each neighbour must have enough
-    history for the same ETFs at their first decision, so the study's own V compares
-    the same period (docs/STRATEGY_EVIDENCE.md, Section 2, "Effective start after
-    signal warmup").
+    The registered start must be the parent's first decision (a month end), and it
+    must come after every warmup: at that decision the parent and each neighbour
+    have enough history for every ETF that is trading, so the study's own V compares
+    one period (docs/STRATEGY_EVIDENCE.md, Section 2, "Effective start after signal
+    warmup"). An ETF not yet trading joins later, like any later listing.
     """
     check_study(registration, dataset)
     results = {planned.key: _run(planned, registration, dataset) for planned in planned_runs(registration)}
     primary = _bps(registration.primary_cost_bps)
-    parent = first_decision(results[f"plan-{primary}bps"])[1]
-    for neighbour in registration.neighbours:
-        differ = parent ^ first_decision(results[f"neighbour-{neighbour.name}-{primary}bps"])[1]
-        if differ:
-            raise ValueError(f"The period starts inside a warmup: at the first decision {neighbour.name} and the "
-                             f"parent differ in which ETFs have enough history ({', '.join(sorted(differ))}); "
-                             "register a later start")
+    if first_decision(results[f"plan-{primary}bps"])[0] != registration.start:
+        raise ValueError("The registered start must be the parent's first decision session, a month end")
+    for name, key in [(registration.plan.name, f"plan-{primary}bps")] + [
+            (n.name, f"neighbour-{n.name}-{primary}bps") for n in registration.neighbours]:
+        lacking = first_decision(results[key])[1]
+        if lacking:
+            raise ValueError(f"The period starts inside a warmup: at the first decision {name} lacks history for "
+                             f"{', '.join(sorted(lacking))}; register a later start")
     return results
 
 

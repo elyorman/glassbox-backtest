@@ -68,6 +68,11 @@ class Registration:
     payload: dict = field(repr=False, compare=False)
 
 
+def shift_name(plan_name, shift):
+    """The name of the parent's copy decided `shift` sessions from month end."""
+    return f"{plan_name}_shift_{'plus' if shift > 0 else 'minus'}_{abs(shift)}"
+
+
 def _text(value, name):
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"Registration {name} must be nonempty text")
@@ -153,6 +158,8 @@ def parse_registration(payload) -> Registration:
         raise ValueError("Plan names must be lower-case letters, digits and underscores")
     if len({c.name for c in configurations}) != len(configurations):
         raise ValueError("The parent and its neighbours need distinct names")
+    if {n.name for n in neighbours} & {shift_name(plan.name, shift) for shift in SHIFTS}:
+        raise ValueError("A neighbour cannot take the name of the parent's shift copy")
     rules = {replace(c, name=plan.name, invested_fraction=plan.invested_fraction) for c in configurations}
     if len(rules) != len(configurations):  # Section 4: pure exposure scaling is not a trial.
         raise ValueError("The parent and its neighbours must differ in more than their names and invested fraction")
@@ -175,9 +182,6 @@ def parse_registration(payload) -> Registration:
     if not isinstance(payload["segments"], list):
         raise ValueError("Registration segments must be a list")
     segments = []
-    if len({values.get("name") if isinstance(values, dict) else None for values in payload["segments"]}) != len(
-            payload["segments"]):
-        raise ValueError("Registration segment names must be distinct")
     for values in payload["segments"]:
         values = _record(values, "segment", ("name", "start", "end"))
         segment = (_text(values["name"], "segment name"), _day(values["start"], "segment start"),
@@ -185,6 +189,8 @@ def parse_registration(payload) -> Registration:
         if segment[1] > segment[2]:
             raise ValueError("Registration segment must start before it ends")
         segments.append(segment)
+    if len({segment[0] for segment in segments}) != len(segments):
+        raise ValueError("Registration segment names must be distinct")
     trials = _record(payload["trials"], "trials", ("cumulative", "this_study", "per_role", "historical_floor"))
     if not isinstance(payload["costs_bps"], list):
         raise ValueError("Registration costs must be a list")
@@ -239,10 +245,10 @@ def parse_registration(payload) -> Registration:
         raise ValueError("Registration earlier studies must be a list")
     earlier = []
     for values in payload["earlier_studies"]:
-        values = _record(values, "earlier study", ("study", "runs"))
-        earlier.append((_text(values["study"], "earlier study"), _text(values["runs"], "earlier study runs")))
-        if "\\" in values["runs"]:
-            raise ValueError("Earlier study runs must be written with forward slashes, which work everywhere")
+        values = _record(values, "earlier study", ("study", "output"))
+        earlier.append((_text(values["study"], "earlier study"), _text(values["output"], "earlier study output")))
+        if "\\" in values["output"]:
+            raise ValueError("Earlier study output must be written with forward slashes, which work everywhere")
     return Registration(
         study, payload["role"], tag, registered_at, payload["code_hash"], dataset["id"], tickers,
         plan, neighbours, tuple(shifts), start, end, published, tuple(segments), costs, primary_cost,

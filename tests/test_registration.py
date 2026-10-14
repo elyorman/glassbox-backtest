@@ -115,6 +115,7 @@ class RegistrationTests(unittest.TestCase):
              "comparison portfolio cannot be registered"),
             (change(("plan", "name"), "Trend_Fixture"), "lower-case letters, digits and underscores"),
             (change(("neighbours", 1, "name"), "trend_fixture_3"), "need distinct names"),
+            (change(("neighbours", 1, "name"), "trend_fixture_shift_plus_2"), "name of the parent's shift copy"),
             (change(("neighbours", 0), plan_to_dict(replace(PARENT, name="trend_fixture_scaled",
                                                             invested_fraction=D("0.9")))),
              "more than their names and invested fraction"),
@@ -134,6 +135,7 @@ class RegistrationTests(unittest.TestCase):
             (change(("publication", "date"), "2027-01-01"), "must not follow the period end"),
             (change(("segments", 0, "end"), "2024-01-01"), "segment must start before"),
             (change(("segments",), example()["segments"] * 2), "segment names must be distinct"),
+            (change(("segments", 0, "name"), ["early"]), "segment name must be nonempty text"),
             (change(("costs_bps",), ["25", "50"]), "the standard's 10, 25 and 50 bps"),
             (change(("costs_bps",), "102550"), "costs must be a list"),
             (change(("primary_cost_bps",), "25"), "primary cost must be 10 bps"),
@@ -161,8 +163,7 @@ class RegistrationTests(unittest.TestCase):
             (change(("cross_check",), {"decision": "x"}), "cross-check must have exactly"),
             (change(("disclosures",), "text"), "disclosures must be a list"),
             (change(("earlier_studies",), [{"study": "x"}]), "earlier study must have exactly"),
-            (change(("earlier_studies",), [{"study": "x", "runs": "local\\x\\runs\\plan-10bps"}]),
-             "forward slashes"),
+            (change(("earlier_studies",), [{"study": "x", "output": "local\\x"}]), "forward slashes"),
         ]
         for apply, message in cases:
             payload = deepcopy(example())

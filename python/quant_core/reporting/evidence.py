@@ -4,7 +4,9 @@
 the registration and the results, never written after seeing them.
 """
 
+from dataclasses import fields
 from decimal import Decimal, localcontext
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -100,6 +102,12 @@ def limitations(registration, dataset, parent_periods):
             "disclosures": list(registration.disclosures)}
 
 
+def _differences(plan, neighbour):
+    """The neighbour's settings that differ from the parent's, compared as values, not as spelled in the file."""
+    return {f.name: primitive(getattr(neighbour, f.name)) for f in fields(neighbour)
+            if f.name != "name" and getattr(neighbour, f.name) != getattr(plan, f.name)}
+
+
 def _flag_outside(uncertainty, observed):
     """Name, per block, each observed value outside its interval: resampling under-represents long falls."""
     for row in uncertainty["blocks"].values():
@@ -139,16 +147,17 @@ def build_pack(registration, dataset, runs, earlier=None):
                                           registration.block_lengths, registration.repetitions, registration.seed),
                                 observed)
     parent_periods = periods(parent, registration.publication, registration.segments)
-    start, lacking = first_decision(runs[f"plan-{primary}bps"])
-    configurations = {run.source.name: content_hash(run.source) for run in planned.values()
+    start, lacking, absent = first_decision(runs[f"plan-{primary}bps"])
+    configurations = {run.source.name: content_hash(plan_to_dict(run.source)) for run in planned.values()
                       if run.role in ("plan", "shift", "neighbour")}
+    differences = {n.name: _differences(registration.plan, n) for n in registration.neighbours}
     rates = dataset.rates
     return {
         "schema_version": SCHEMA_VERSION,
         "registration": {"study": registration.study, "role": registration.role, "tag": registration.tag,
                          "hash": registration.hash, "registered_at": registration.registered_at.isoformat(),
                          "dataset_id": registration.dataset_id, "code_hash": registration.code_hash,
-                         "plan": plan_to_dict(registration.plan),
+                         "plan": plan_to_dict(registration.plan), "neighbours": differences,
                          "primary_cost_bps": primary, "primary_reference": registration.primary_reference,
                          "trials": {"cumulative": registration.trials, "this_study": registration.trials_this_study,
                                     "per_role": registration.trials_per_role},
@@ -162,7 +171,8 @@ def build_pack(registration, dataset, runs, earlier=None):
         "uncertainty": {"observed": observed, "reference": registration.primary_reference, **uncertainty},
         "deflated_sharpe": {**deflated(parent, neighbours, registration.trials, registration.historical_floor),
                             "per_role_trials": registration.trials_per_role},
-        "start": {"first_decision": start.isoformat(), "without_enough_history": sorted(lacking)},
+        "start": {"first_decision": start.isoformat(), "without_enough_history": sorted(lacking),
+                  "without_data": sorted(absent)},
         "periods": parent_periods,
         "sensitivity": {key: {"role": run.role, "label": _label(run, primary),
                               **{name: rows[key][name] for name in SENSITIVITY_FIELDS}}
@@ -243,7 +253,7 @@ def render_pack(pack):
              f"{reference}", "",
              "Sharpe and Sortino ratios use daily returns over T-bills; volatility and drawdowns use daily "
              "returns. Formulas: docs/VALIDATION.md, \"Evidence metrics\"."]
-    lines += _registration(registration["file"], registration["configuration_hashes"])
+    lines += _registration(registration)
     lines += ["", "## Results", ""]
     lines += _table(("Cost (bps)", "First session", "Last session", "CAGR", "Volatility", "Sharpe", "Sortino",
                      "Max drawdown", "Calmar", "Turnover a year", "Trades"),
@@ -311,8 +321,9 @@ def render_pack(pack):
               f"{moments['observations']} sessions, skewness {_fixed(moments['skewness'], 2)}, kurtosis "
               f"{_fixed(moments['kurtosis'], 2)} (raw; normal is 3).", "", "## Periods", "",
               f"First decision {pack['start']['first_decision']}; ETFs without enough history then: "
-              f"{', '.join(pack['start']['without_enough_history']) or 'none'}. An ETF joins once it has the "
-              "history the rule needs.", "", "### Calendar years", ""]
+              f"{', '.join(pack['start']['without_enough_history']) or 'none'}; without data then (not yet "
+              f"listed, or no bar that day): {', '.join(pack['start']['without_data']) or 'none'}. An ETF joins "
+              "once it has the history the rule needs.", "", "### Calendar years", ""]
     found = pack["periods"]
     lines += _table(period_header, _period_rows(found["calendar_years"].items()))
     lines += ["", "### Predeclared windows, since publication and segments", ""]
@@ -372,21 +383,22 @@ def render_pack(pack):
     return "\n".join(lines) + "\n"
 
 
-def _registration(file, hashes):
+def _registration(registration):
     """The registration section: everything fixed before the run, from the registration file itself."""
-    plan, period, publication = file["plan"], file["period"], file["publication"]
+    file, plan = registration["file"], registration["plan"]
+    period, publication = file["period"], file["publication"]
     lines = ["", "## Registration", "",
              f"Period {period['start']} to {period['end']}. The rule's source was first published "
              f"{publication['date']}: {publication['source']}.", "", f"### Parent: {plan['name']}", ""]
     lines += _table(("Setting", "Value"), [(key, _setting(value)) for key, value in plan.items() if key != "name"])
     lines += ["", "### Neighbours", ""]
     lines += _table(("Neighbour", "Settings that differ from the parent"),
-                    [(n["name"], "; ".join(f"{key} {_setting(value)}" for key, value in n.items()
-                                           if key != "name" and plan.get(key) != value) or "none")
-                     for n in file["neighbours"]])
+                    [(name, "; ".join(f"{key} {_setting(value)}" for key, value in differs.items()))
+                     for name, differs in registration["neighbours"].items()])
     lines += ["", f"Rebalance shifts: {', '.join(f'{shift:+d}' for shift in file['rebalance_shifts'])} sessions.",
               "", "### Configuration hashes", ""]
-    lines += _table(("Configuration", "Hash"), [(name, f"`{digest}`") for name, digest in hashes.items()])
+    lines += _table(("Configuration", "Hash of its plan_to_dict value"),
+                    [(name, f"`{digest}`") for name, digest in registration["configuration_hashes"].items()])
     lines += ["", "### Parameter sources", ""]
     lines += _table(("Parameter", "Source"), [(row["parameter"], row["source"]) for row in file["sources"]])
     lines += ["", "### Departures from the sources", ""]
@@ -398,16 +410,20 @@ def _registration(file, hashes):
     lines += ["", "### Independent-provider cross-check", "",
               f"{file['cross_check']['decision']}. Reason: {file['cross_check']['reason']}."]
     lines += ["", "### Earlier studies", ""] + _bullets(
-        [f"{row['study']}: {row['runs']}" for row in file["earlier_studies"]], "None.")
+        [f"{row['study']}: {row['output']}" for row in file["earlier_studies"]], "None.")
     return lines
 
 
-def write_pack(pack, directory):
-    """Write pack.json and PACK.md into a study's output directory, never replacing either; returns the
-    pack's content hash."""
+def pack_files(pack):
+    """pack.json and PACK.md as text, so both exist before anything is saved."""
+    return {"pack.json": json.dumps(primitive(pack), indent=2, sort_keys=True, allow_nan=False) + "\n",
+            "PACK.md": render_pack(pack)}
+
+
+def write_pack(files, directory):
+    """Write `pack_files` into a study's output directory, never replacing either; returns pack.json's SHA-256."""
     directory = Path(directory)
-    for name, text in (("pack.json", json.dumps(primitive(pack), indent=2, sort_keys=True, allow_nan=False) + "\n"),
-                       ("PACK.md", render_pack(pack))):
+    for name, text in files.items():
         with open(directory / name, "x", encoding="utf-8", newline="\n") as stream:
             stream.write(text)
-    return content_hash(pack)
+    return sha256(files["pack.json"].encode("utf-8")).hexdigest()

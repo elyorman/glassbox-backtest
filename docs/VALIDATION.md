@@ -148,9 +148,9 @@ is the content hash of the file's JSON value, whatever its layout.
   `rule` field), so each configuration's hash follows from the file. At least
   two neighbours of the parent's rule; all built-in plans without a decision
   offset, named in lower-case letters, digits and underscores, with distinct
-  names, and differing in more than their names and invested fraction (pure
-  exposure scaling is not a trial). A comparison rule (`fixed_weight`,
-  `equal_weight`) cannot be the parent.
+  names (none taking a shift copy's name), and differing in more than their
+  names and invested fraction (pure exposure scaling is not a trial). A
+  comparison rule (`fixed_weight`, `equal_weight`) cannot be the parent.
 - `rebalance_shifts`: −2 and 2. `period` (start, end), `publication` (date,
   source), `segments` (distinct names, start, end); dates are YYYY-MM-DD.
 - `costs_bps`: 10, 25 and 50; `primary_cost_bps`: 10, where the standard
@@ -165,8 +165,9 @@ is the content hash of the file's JSON value, whatever its layout.
 - `sources` (at least one parameter source), `departures` (what and why),
   `related_ledger_rows`, `cross_check` (decision and reason), `disclosures`
   (plain-language text for the limitations page) and `earlier_studies`
-  (each earlier built-in's study name and the directory of its primary run,
-  written with forward slashes).
+  (each earlier built-in's study name and its output directory, written with
+  forward slashes; the run used is the parent at the primary cost that the
+  study's own `pack.json` names, checked by its result hash).
 
 **Runs.** `planned_runs` lists every run in a fixed order: the parent at each
 cost; at the primary cost the parent with fills at the second open, with idle
@@ -180,9 +181,11 @@ equal weights over the plan's ETFs, and T-bills alone (the `cash`
 benchmark, which holds nothing). `simulate_study` refuses a dataset whose ID,
 code whose hash differs from the registration, or a dataset without the
 registered tickers, then completes every run in memory. It also refuses a
-start inside a warmup: at the first decision the parent and every neighbour
-must have enough history for the same ETFs, so the study's own V compares one
-period. `run_study` does the same and only then saves each run with
+start that is not the parent's first decision (a month end), and a start
+inside a warmup: at that decision the parent and every neighbour must have
+enough history for every ETF that is trading, so the study's own V compares
+one period. An ETF not yet trading joins later, like any later listing.
+`run_study` does the same and only then saves each run with
 `save_run` under `<output>/runs/<key>/`, refusing an existing output
 directory. The guard is per directory: the tag and the ledger are what make
 a study's one run auditable.
@@ -194,7 +197,8 @@ the observed values and bootstrap intervals against the primary reference,
 naming any observed value outside its interval (resampling under-represents
 long falls); the deflated Sharpe ratio (refused, naming the configuration,
 when the parent or a neighbour has no Sharpe ratio); the first decision and
-the ETFs without enough history then; periods; sensitivity (costs, delay,
+the ETFs without data then (not yet listed, or no bar that day); periods;
+sensitivity (costs, delay,
 0% cash, shifts, neighbours); the cash convention; overlap with earlier
 built-ins, with the earlier run's result hash; and reproduction (the command,
 the tag, the registration hash, dataset ID, code hash and each run's result
@@ -202,10 +206,10 @@ hash). The limitations page is generated, never written after the results:
 provider, dataset and each ETF's first session, the snapshot's limitations
 and the dataset's quality warnings, the losing calendar years, the five
 largest drawdowns, a fixed list of what the plan does not promise and the
-registration's disclosures. `write_pack` writes `pack.json` (every number at
+registration's disclosures. `pack_files` renders `pack.json` (every number at
 full precision) and `PACK.md` (the registration and the main numbers, rounded
-for reading; a probability never shows as 1.0000 or 0.0000) and never
-replaces either.
+for reading; a probability never shows as 1.0000 or 0.0000); `write_pack`
+writes them, never replacing either, and returns `pack.json`'s SHA-256.
 
 **Commands.** From the repository root at the registration's tag:
 
@@ -217,16 +221,20 @@ PYTHONPATH=python .venv/bin/python -m quant_core.validation.study_cli run \
   --output local/<study>
 ```
 
-Both load the registration, the dataset and each earlier study's primary run
-(refusing any other run of it), complete every run and build the pack in
-memory. `check` then shows and saves nothing, so a registration that cannot
-run is found before it is tagged. `run` refuses an existing output directory
-before anything runs, and only after the pack is built saves the runs and
-writes `pack.json` and `PACK.md`. Both print a JSON summary and exit 0, or
-explain the refusal and exit 2; nothing is saved after a refusal. Earlier
-studies' run directories are relative to the working directory. If saving
-itself fails (a full disk), the results exist: record it in the ledger
-before running again.
+Both load the registration, the dataset and each earlier study's primary run,
+complete every run and render the pack in memory. `check` then shows and
+saves nothing, so a registration that cannot run is found before it is
+tagged. `run` refuses an existing output directory before anything runs, and
+only after the pack is rendered saves the runs and writes `pack.json` and
+`PACK.md`. Both print a JSON summary and exit 0, or explain the refusal and
+exit 2; nothing is saved after a refusal. Earlier studies' output directories
+are relative to the working directory. If saving itself fails (a full disk),
+the results exist: record it in the ledger before running again.
+
+`check` runs every declared configuration on the registered panel, so each
+counts as a trial (Section 4 of the standard) whether or not its outcome is
+seen. If a check leads to a changed configuration, the replaced one goes in
+the ledger and counts; a changed period alone is not a trial.
 
 ## Frozen campaign and qualification contract
 
