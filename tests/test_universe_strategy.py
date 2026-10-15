@@ -4,7 +4,6 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from importlib.util import find_spec
-import json
 from tempfile import TemporaryDirectory
 import unittest
 
@@ -38,15 +37,10 @@ class UniverseStrategyTests(unittest.TestCase):
     @unittest.skipUnless(find_spec("pyarrow"), "Optional PyArrow is not installed")
     def test_provider_response_roundtrips_and_raw_volume_portfolio_runs_from_parquet(self):
         from quant_core.data import RAW_PRICES_SPLIT_ADJUSTED_VOLUME
-        from quant_core.data.eodhd import EodhdJsonSource
         from quant_core.data.parquet import save_parquet_snapshot, load_parquet_snapshot
         data, members, recipe = fixture()
-        responses = {asset+".US": json.dumps([{"date":b.session.isoformat(), "open":str(b.open),
-                                                "high":str(b.high), "low":str(b.low), "close":str(b.close),
-                                                "volume":int(b.volume)} for b in data.bars if b.security_id == asset]).encode()
-                     for asset in recipe.universe}
-        imported = EodhdJsonSource(responses, {a+".US":a for a in recipe.universe}, data.sessions,
-                                  data.securities, replace(data.metadata, source="eodhd", actions_complete=False)).load()
+        imported = replace(data, metadata=replace(data.metadata, source="provider", actions_complete=False,
+                                                  adjustment_policy=RAW_PRICES_SPLIT_ADJUSTED_VOLUME))
         with TemporaryDirectory() as folder:
             save_parquet_snapshot(imported, Path(folder)/"provider")
             save_parquet_snapshot(data, Path(folder)/"raw")

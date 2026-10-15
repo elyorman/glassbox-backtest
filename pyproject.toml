@@ -16,7 +16,7 @@ parquet = ["pyarrow>=18,<24"]
 quant-data = "quant_core.cli:main"
 quant-backtest = "quant_core.backtest.cli:main"
 quant-strategies = "quant_core.strategies.cli:main"
-quant-validate = "quant_core.validation.cli:main"
+quant-study = "quant_core.validation.study_cli:main"
 quant-universe = "quant_core.universes.cli:main"
 
 [tool.setuptools.packages.find]
