@@ -33,5 +33,6 @@ Panels (all Alpaca SIP raw daily bars, with SPY as reference):
 | 2026-10-08 | Qualification standard replaced (disclosed evidence, ETF-based built-ins); market-adjusted momentum paused, not run | — | — | commit cd92788 | 0 | 44 | Decision | commit cd92788 |
 | 2026-10-11 | Repository cleanup: closed-study docs, scripts and tests removed from the working tree | — | — | tag `archive/research-2026-10` | 0 | 44 | Housekeeping; no outcome changed | commit 766abf8 |
 | 2026-10-15 | V1 simplification: docs consolidated, unused research code removed | — | — | commit e6ba796 (state before) | 0 | 44 | Housekeeping; no outcome changed | — |
+| 2026-10-15 | Exploratory look, not registered: the four built-in plans as published (95% invested, 10 bps, Treasury cash), each from its first full decision; SPY, 60/40, equal weight and T-bills alongside | Tiingo 18 ETFs (dataset 3fd6db29…c718) | 1999-12-31 – 2026-10-12 (per plan) | none | 4 | 48 | Exploratory; nothing changed after looking. CAGR / max drawdown: trend 4.4% / 14.7%, dual momentum 8.7% / 32.1%, sector rotation 8.6% / 44.8%, inverse volatility 4.5% / 16.8%; SPY 8.0–10.7% / 53%; 60/40 had the highest Sharpe in every period | `local/exploratory-2026-10-15/` |
 
 Forward journals: the Stock-22 SMA200 journal is discontinued.
