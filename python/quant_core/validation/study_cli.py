@@ -1,4 +1,4 @@
-"""Check or run a registered study and write its evidence pack (docs/VALIDATION.md, "Registered studies")."""
+"""Check or run a registered study and write its evidence pack (docs/ENGINE.md, "Registered studies")."""
 
 import argparse
 import json

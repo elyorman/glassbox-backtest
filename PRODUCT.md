@@ -17,14 +17,16 @@ It is not for day traders, stock pickers or anyone looking for predictions.
 
 ## What V1 is
 
-- A local web app: a Python engine plus the user's browser, on the user's own
-  computer. No account. Nothing leaves the machine.
+- Four built-in ETF plans, deciding monthly from daily prices: decide at the
+  month-end close, trade at the next open.
+- A backtester that isn't a black box: every number traces to its inputs.
+- Risk and money management on every order.
+- The monthly order sheet, from holdings the user types in by hand: what to
+  trade and why. The user places orders at their own broker.
+- A local web app shipped in a native window (pywebview): a Python engine and
+  its interface on the user's own computer. No account. Nothing leaves the
+  machine.
 - Data from Tiingo with the user's own free key, stored locally.
-- Four built-in ETF plans, and a trend test on any single US stock or ETF.
-- Monthly decisions from daily prices. Decide at the month-end close, trade at
-  the next open.
-- The app says what to trade and why. The user places orders at their own
-  broker.
 
 ## Screens
 
@@ -33,9 +35,8 @@ It is not for day traders, stock pickers or anyone looking for predictions.
 | Setup | Paste the Tiingo key; download and check price history. |
 | Plans | The four plans as cards: what they hold, how often they trade, worst year. |
 | Backtest | Run a plan with your dates, amount, costs and risk settings; see results, trades, decisions and assumptions. |
-| Test a ticker | The trend rule on any stock or ETF (QQQ, AAPL…) against simply holding it. |
 | This month | The order sheet: shares to buy and sell, the reason for each line, the estimated cost. |
-| Holdings | Your positions and cash, typed in or imported from CSV; how to move onto a plan. |
+| Holdings | Your positions and cash, typed in by hand; how to move onto a plan. |
 | Settings | Data key and refresh, default costs, risk settings. |
 
 ## Built-in plans
@@ -90,7 +91,7 @@ Every number can be traced to its inputs and recomputed:
 
 ### New user
 
-1. Install and open; the app opens in the browser.
+1. Install and open; the app opens in its own window.
 2. Paste a Tiingo key; prices download and are checked.
 3. Read the plan cards and compare them.
 4. Backtest a plan; read the results and the limits page.
@@ -101,7 +102,7 @@ Every number can be traced to its inputs and recomputed:
 
 ### Already holding positions
 
-1. Enter holdings and cash, or import the CSV template.
+1. Type in holdings and cash.
 2. The app splits them into "in the plan" and "outside the plan".
 3. Choose how to start:
    - **Full switch:** sell what is outside, buy the plan.
@@ -112,8 +113,7 @@ Every number can be traced to its inputs and recomputed:
    calculation).
 5. The order sheet starts from real holdings and lists only what must change.
 
-Positions outside the plan are never managed, but each can be checked with
-"Test a ticker".
+Positions outside the plan are never managed.
 
 ### Every month
 
@@ -130,7 +130,6 @@ mark them done.
 | An order filled differently | The user enters actual shares; next month corrects the gap. |
 | Plan holds cash or bonds | Shows the rule and number that caused it. |
 | Switching plans or settings | Backtests both side by side, then shows the trades to switch. |
-| Short-history ticker | Runs it and warns how few years it covers. |
 | Data refresh fails | Says what failed and how to fix it; keeps the last good data; no order sheet from incomplete data. |
 | Missing or suspicious price | Names the ticker and date; blocks the order sheet until resolved. |
 | Month-end holiday | The trading calendar picks the last real session. |
@@ -138,7 +137,7 @@ mark them done.
 ## Architecture
 
 ```text
-Browser app            Plans · Backtest · Test a ticker · This month · Holdings · Settings
+App window (pywebview) Plans · Backtest · This month · Holdings · Settings
       │
 Local server           one API; a thin CLI calls the same API
       │
@@ -167,7 +166,9 @@ Local storage          price cache · holdings · settings · saved runs
 | Intraday, futures, options, forex, crypto | The engine is built for daily stocks and ETFs. |
 | Tax calculation | Depends on country and account; the app only warns. |
 | Alerts, accounts, cloud sync, macOS | Local-first; the user opens the app. |
-| Strategy builder | The four plans, "Test a ticker" and the risk settings cover V1. |
+| Strategy builder | The four plans and the risk settings cover V1. |
+| Free local MCP server | Lets AI assistants query the local engine; comes after the app. |
+| Korean version | V1 is in English. |
 
 ## Open questions
 

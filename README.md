@@ -1,41 +1,19 @@
-# Quantitative Research Platform
+# Quant Platform
 
-Local-first research software for US ETFs and equities: built-in investment
-plans with an honest track record, a realistic backtester, risk and sizing,
-and a monthly order sheet that says what to buy and why. Everything runs on
-the user's computer with the user's own data key.
+A local app that turns four published ETF investing rules into an exact monthly order sheet, with a
+backtest traceable to every input and built-in risk and money management. It runs on your own
+computer with your own Tiingo key.
 
-The goal: **strong enough that a quant can audit it, simple enough that a smart
-non-trader can use it in ten minutes.**
-
-- [PROJECT.md](PROJECT.md): product requirements, commercial model, decisions.
-- [Roadmap](docs/ROADMAP.md): the V1 tester release, build order and status.
-- [Evidence standard](docs/STRATEGY_EVIDENCE.md): how a built-in plan qualifies.
-- [Research ledger](docs/RESEARCH_LEDGER.md): every study, including failures.
-
-## What exists
-
-| Area | State |
+| Part | Status |
 | --- | --- |
-| Market data | Tiingo download and import (the tester release's provider), frozen research datasets with Treasury 3-month cash rates, CSV/JSON/Parquet snapshots, EODHD import, provider adjustment cross-checks, data-quality checks, dated index membership. |
-| Backtester | Next-open fills, shared cash, costs, idle-cash interest, splits/dividends/delistings, stops, read-only reference series, entry-to-exit trade records, full audit bundles. |
-| Risk and sizing | Position, cash, exposure, liquidity and drawdown limits; fixed, fractional and ATR sizing; every refusal recorded. |
-| Strategies | The four rule-based V1 plans (multi-asset trend, dual momentum, US sector rotation, inverse volatility) with hand-checked tests, not yet run on real data; six research rule families. The ML plan: not built yet. |
-| Validation | Campaign framework, stationary bootstrap, deflated Sharpe ratio, cost and period breakdowns. Evidence-pack report: not built yet. |
-| ML, order sheet, Rewind, UI, packaging | Not started; see the roadmap. |
+| Data: Tiingo prices, Treasury cash rates, frozen datasets, quality checks | Built |
+| Backtester: next-open fills, costs, dividends, interest, full audit bundles | Built |
+| Four rule plans (trend, dual momentum, sector rotation, inverse volatility) | Built, tested on synthetic data |
+| Risk and money management in the engine | Built; not yet wired to the plans |
+| Evidence packs for registered studies | Built; no plan registered yet |
+| Monthly order sheet, local web app in a native window | Not started |
 
-Contracts: [data layer](docs/DATA_LAYER.md), [data integration](docs/DATA_INTEGRATION.md),
-[universes](docs/UNIVERSES.md), [backtester](docs/BACKTESTER.md),
-[risk](docs/RISK_MANAGEMENT.md), [strategies](docs/STRATEGIES.md),
-[validation](docs/VALIDATION.md), [reproducibility](docs/REPRODUCIBILITY.md).
-The SMA200 [forward signal journal](docs/FORWARD_SHADOW.md) has its first
-capture window after the 2026-10-30 close.
-
-Research from October 2026 (stock campaigns, SEC fundamentals studies, their
-scripts and reports) was removed from the working tree; the git tag
-`archive/research-2026-10` keeps it, and the ledger records every outcome.
-
-## Development
+## Quick start
 
 ```bash
 python3 -m venv .venv
@@ -43,6 +21,26 @@ python3 -m venv .venv
 PYTHONPATH=python .venv/bin/python -m unittest discover -s tests
 ```
 
-Credentials go in `.env` (gitignored; see `.env.example`). Downloaded data and
-generated artifacts go in the ignored `local/` directory. Never commit
-credentials or third-party datasets.
+## Data
+
+Put your key in `.env` (gitignored; see `.env.example`) as `TIINGO_API_KEY=...`, then freeze a
+dataset of every ETF the plans trade plus Treasury rates (exit code 3: budget spent, run it again later):
+
+```bash
+PYTHONPATH=python .venv/bin/python -m quant_core.cli download-tiingo --output local/data/<name>
+```
+
+## Registered studies
+
+```bash
+PYTHONPATH=python .venv/bin/python -m quant_core.validation.study_cli check \
+  docs/registrations/<study>.json --dataset local/data/<name>
+PYTHONPATH=python .venv/bin/python -m quant_core.validation.study_cli run \
+  docs/registrations/<study>.json --dataset local/data/<name> --output local/<study>
+```
+
+`check` rehearses every run and saves nothing; `run` writes the runs, `pack.json` and `PACK.md`.
+
+[PRODUCT.md](PRODUCT.md): what V1 is · [AGENTS.md](AGENTS.md): how to work here ·
+[docs/ENGINE.md](docs/ENGINE.md): technical reference · [docs/RESEARCH_LEDGER.md](docs/RESEARCH_LEDGER.md):
+every study, including failures

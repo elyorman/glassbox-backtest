@@ -1,4 +1,4 @@
-"""A study's registration: everything fixed before its one registered run (docs/STRATEGY_EVIDENCE.md, Section 3).
+"""A study's registration: everything fixed before its one registered run (docs/ENGINE.md, Registered studies).
 
 The file is docs/registrations/<study>.json, committed and tagged before the run.
 `load_registration` refuses anything incomplete or inconsistent; the registration hash
@@ -19,7 +19,7 @@ from quant_core.strategies.plans import PlanConfig, plan_from_dict
 SCHEMA_VERSION = 1
 REFERENCES = ("spy_buy_hold", "sixty_forty", "equal_weight", "tbills")
 REFERENCE_TICKERS = ("IEF", "SPY")
-# The standard's roles (docs/STRATEGY_EVIDENCE.md, Section 1), its cost ladder and its rebalance-day shifts.
+# The standard's roles (docs/ENGINE.md, Evidence), its cost ladder and its rebalance-day shifts.
 ROLES = ("Cross-asset trend following", "Tactical equity/bond allocation", "Equity sector rotation, always invested",
          "Diversified defensive allocation", "Model-ranked multi-asset rotation")
 COSTS_BPS, PRIMARY_COST_BPS, SHIFTS = (Decimal(10), Decimal(25), Decimal(50)), Decimal(10), (-2, 2)

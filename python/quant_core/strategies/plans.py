@@ -1,6 +1,6 @@
 """Built-in monthly plans: four published rules turned into target weights.
 
-Rules, sources and departures are in docs/STRATEGIES.md (Built-in plans). A
+Rules, sources and departures are in docs/ENGINE.md (Plans). A
 rule sees only month-end values of the securities that passed the data checks,
 oldest first, and T-bill growth per month; MonthlyPlan owns the data checks,
 share counts and orders.
@@ -289,7 +289,7 @@ def plan_from_dict(values):
 
 
 def builtin_plans():
-    """The four tester-release configurations; see docs/STRATEGIES.md for their sources."""
+    """The four tester-release configurations; see docs/ENGINE.md (Plans) for their sources."""
     return (TrendPlan(name="multi_asset_trend", universe=("SPY", "EFA", "IEF", "VNQ", "GSG")),
             DualMomentumPlan(name="dual_momentum", universe=("SPY", "EFA", "AGG"),
                              us_stocks="SPY", non_us_stocks="EFA", bonds="AGG"),

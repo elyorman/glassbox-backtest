@@ -1,7 +1,7 @@
 # Research ledger
 
 One line per study, past and future. Append only; never edit an outcome.
-Counting rule: [evidence standard, Section 4](STRATEGY_EVIDENCE.md#4-trial-count-and-deflated-sharpe-ratio).
+Counting rule: [trial counts](ENGINE.md#trial-counts).
 Studies before 2026-10-08 predate the git-tag process: their evidence and the
 hash seals inside it remain under `local/` on the original machine, and their
 docs, scripts and tests are kept at the git tag `archive/research-2026-10`.
@@ -30,11 +30,8 @@ Panels (all Alpaca SIP raw daily bars, with SPY as reference):
 | 2026-10-05 | Five-family research decision review; volume specification frozen | — | — | pre-tag; seals in `local/` | 0 | 38 | Review; no simulations | `local/research-decision-2026-10-05/` |
 | 2026-10-06 | Unusual dollar volume: 2 ranked + 1 control on each panel | Stock-22, Stock-47 | 2016-01-04 – 2026-10-02 | pre-tag; seals in `local/` | 6 | 44 | Rejected on both panels; direction check fails | `local/volume-2026-10-06/` (original attempt), `local/volume-2026-10-06-finalized/` |
 | 2026-10-06 | Research design review; market-adjusted momentum specification frozen | — | — | pre-tag; seals in `local/` | 0 | 44 | Review; no simulations | `local/research-design-review-2026-10-06/` |
-| 2026-10-08 | Qualification standard replaced (disclosed evidence, ETF-based built-ins); market-adjusted momentum paused, not run | — | — | commit cd92788 | 0 | 44 | Decision | [spec](superpowers/specs/2026-10-08-strategy-qualification-standard-design.md) |
-| 2026-10-11 | Repository cleanup: closed-study docs, scripts and tests removed from the working tree | — | — | tag `archive/research-2026-10` | 0 | 44 | Housekeeping; no outcome changed | [roadmap](ROADMAP.md) |
+| 2026-10-08 | Qualification standard replaced (disclosed evidence, ETF-based built-ins); market-adjusted momentum paused, not run | — | — | commit cd92788 | 0 | 44 | Decision | commit cd92788 |
+| 2026-10-11 | Repository cleanup: closed-study docs, scripts and tests removed from the working tree | — | — | tag `archive/research-2026-10` | 0 | 44 | Housekeeping; no outcome changed | commit 766abf8 |
+| 2026-10-15 | V1 simplification: docs consolidated, unused research code removed | — | — | commit e6ba796 (state before) | 0 | 44 | Housekeeping; no outcome changed | — |
 
-Forward journals:
-
-| Registered | Journal | Status |
-| --- | --- | --- |
-| 2026-10-05 | SMA200 trend, Stock-22 recipe | Zero records; first window after the 2026-10-30 close. See [forward journal](FORWARD_SHADOW.md). |
+Forward journals: the Stock-22 SMA200 journal is discontinued.

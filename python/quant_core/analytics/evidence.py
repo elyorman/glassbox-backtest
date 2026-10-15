@@ -3,7 +3,7 @@
 The excess return of a session is x = r - c: the portfolio's return minus what one
 unit of idle cash earned over the same interval under the run's own rate series
 (zero without one). Sharpe and Sortino use x; volatility and drawdowns use r.
-Formulas: docs/VALIDATION.md, "Evidence metrics".
+Formulas: docs/ENGINE.md, "Evidence metrics".
 """
 
 from dataclasses import dataclass

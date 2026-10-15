@@ -11,9 +11,9 @@ SCHEME = re.compile(r"[a-z]+://", re.IGNORECASE)
 
 
 def governing_documents():
-    # Plans and specs under docs/superpowers quote link text inside code blocks; they are not governing docs.
+    # docs/superpowers holds local working notes (gitignored), not governing docs.
     documents = [path for path in DOCS.rglob("*.md") if path.relative_to(DOCS).parts[0] != "superpowers"]
-    return [ROOT / "README.md", ROOT / "PROJECT.md", ROOT / "AGENTS.md"] + sorted(documents)
+    return [ROOT / "README.md", ROOT / "PRODUCT.md", ROOT / "AGENTS.md"] + sorted(documents)
 
 
 def link_is_broken(document, target):
@@ -37,5 +37,5 @@ class DocsLinkTests(unittest.TestCase):
         self.assertEqual(broken, [], "Broken relative links:\n" + "\n".join(broken))
 
     def test_governing_documents_exist(self):
-        for name in ("STRATEGY_EVIDENCE.md", "RESEARCH_LEDGER.md"):
-            self.assertTrue((DOCS / name).exists(), f"docs/{name} is required by the standard")
+        for name in ("ENGINE.md", "RESEARCH_LEDGER.md"):
+            self.assertTrue((DOCS / name).exists(), f"docs/{name} is required")

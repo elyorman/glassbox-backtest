@@ -1,4 +1,4 @@
-"""The evidence pack of a registered study: every number, from the study's runs (docs/STRATEGY_EVIDENCE.md, Section 2).
+"""The evidence pack of a registered study: every number, from the study's runs (docs/ENGINE.md, Evidence).
 
 `build_pack` returns plain values; the limitations page is generated from the data,
 the registration and the results, never written after seeing them.
@@ -252,7 +252,7 @@ def render_pack(pack):
              f"- Costs: slippage in basis points of each fill; primary {primary} bps; primary reference "
              f"{reference}", "",
              "Sharpe and Sortino ratios use daily returns over T-bills; volatility and drawdowns use daily "
-             "returns. Formulas: docs/VALIDATION.md, \"Evidence metrics\"."]
+             "returns. Formulas: docs/ENGINE.md, \"Evidence metrics\"."]
     lines += _registration(registration)
     lines += ["", "## Results", ""]
     lines += _table(("Cost (bps)", "First session", "Last session", "CAGR", "Volatility", "Sharpe", "Sortino",

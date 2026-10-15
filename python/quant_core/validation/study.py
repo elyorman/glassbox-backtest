@@ -1,6 +1,6 @@
 """A registered study: every run its registration declares, run once on the registered dataset and code.
 
-docs/VALIDATION.md, "Registered studies". The parent plan runs at each cost; at the
+docs/ENGINE.md, "Registered studies". The parent plan runs at each cost; at the
 primary cost also with a second-open delay, with idle cash earning 0%, with each
 rebalance shift and as each neighbour; every comparison portfolio runs at each cost
 and with 0% cash. Every run completes in memory before anything is saved; runs are
@@ -118,8 +118,8 @@ def simulate_study(registration, dataset):
     The registered start must be the parent's first decision (a month end), and it
     must come after every warmup: at that decision the parent and each neighbour
     have enough history for every ETF that is trading, so the study's own V compares
-    one period (docs/STRATEGY_EVIDENCE.md, Section 2, "Effective start after signal
-    warmup"). An ETF not yet trading joins later, like any later listing.
+    one period (docs/ENGINE.md, "Registered studies"). An ETF not yet trading joins
+    later, like any later listing.
     """
     check_study(registration, dataset)
     results = {planned.key: _run(planned, registration, dataset) for planned in planned_runs(registration)}
