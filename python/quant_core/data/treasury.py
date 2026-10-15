@@ -106,7 +106,7 @@ class TreasuryClient:
             if cached is not None:
                 parse_year(cached[0], year)
                 return TreasuryResponse(year, *cached)
-        raw = fetch(URL.format(year=year), {"Accept": "text/csv", "User-Agent": "quant-platform-core"},
+        raw = fetch(URL.format(year=year), {"Accept": "text/csv", "User-Agent": "glassbox-backtest"},
                     self.timeout, "Treasury")
         retrieved_at = _now()
         observations = parse_year(raw, year)

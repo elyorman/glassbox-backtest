@@ -1,11 +1,17 @@
-# Product
+# Glassbox Backtest: the intended product
 
 A local app that turns four published investing rules into an exact monthly
 instruction, with an honest, fully traceable backtest and built-in risk and
 money management.
 
-> Pick a proven rule, see honestly how it did, set your risk limits, and get
+> Pick a published rule, see honestly how it did, set your risk limits, and get
 > exactly what to buy each month.
+
+**Status (October 2026):** this is the design of the app the project set out to
+build. The engine, the four plans, the risk engine and the evidence tools exist
+(see [docs/ENGINE.md](docs/ENGINE.md)); the order sheet, holdings, screens and
+local server were not built, and most risk controls below are not yet connected
+to the plans. The code is published as is under the [MIT license](LICENSE).
 
 ## Who it is for
 
@@ -15,7 +21,7 @@ paste an API key; they are not finance experts.
 
 It is not for day traders, stock pickers or anyone looking for predictions.
 
-## What V1 is
+## Planned V1
 
 - Four built-in ETF plans, deciding monthly from daily prices: decide at the
   month-end close, trade at the next open.
@@ -23,9 +29,8 @@ It is not for day traders, stock pickers or anyone looking for predictions.
 - Risk and money management on every order.
 - The monthly order sheet, from holdings the user types in by hand: what to
   trade and why. The user places orders at their own broker.
-- A local web app shipped in a native window (pywebview): a Python engine and
-  its interface on the user's own computer. No account. Nothing leaves the
-  machine.
+- A local web app: a Python engine and its interface in the user's browser, on
+  the user's own computer. No account. Nothing leaves the machine.
 - Data from Tiingo with the user's own free key, stored locally.
 
 ## Screens
@@ -56,16 +61,16 @@ tested on, the costs assumed, and what it does not promise.
 Every order passes through this layer. Defaults keep each plan as published; the
 user switches controls on and compares "as published" with "with my settings".
 
-| Control | What it does | Default |
-| --- | --- | --- |
-| Amount managed | The part of the account the plan runs. | Whole account |
-| Cash reserve | Always kept in cash. | 5% |
-| Whole shares | Buys rounded down to whole shares. | Always |
-| Minimum trade | Skips rebalancing trades smaller than this. | 2% of account (to confirm) |
-| Costs | Slippage and fees on every trade. | 10 bps per side |
-| Position cap | No single ETF above this share. | Off |
-| Drawdown brake | Hold half after a set fall from the peak, cash after a larger one; re-enter by a stated rule. | Off |
-| Stop per holding | Sell a holding that falls a set amount below entry; cash until the next decision. | Off |
+| Control | What it does | Default | Built for the plans? |
+| --- | --- | --- | --- |
+| Amount managed | The part of the account the plan runs. | Whole account | No (a backtest's starting cash only) |
+| Cash reserve | Always kept in cash. | 5% | Yes |
+| Whole shares | Buys rounded down to whole shares. | Always | Yes |
+| Minimum trade | Skips rebalancing trades smaller than this. | 2% of account (to confirm) | No |
+| Costs | Slippage and fees on every trade. | 10 bps per side | Yes |
+| Position cap | No single ETF above this share. | Off | No (exists in the risk engine) |
+| Drawdown brake | Hold half after a set fall from the peak, cash after a larger one; re-enter by a stated rule. | Off | No (the risk engine has a halt without re-entry) |
+| Stop per holding | Sell a holding that falls a set amount below entry; cash until the next decision. | Off | No (exists in the risk engine) |
 
 Results say plainly when a control made things worse.
 
@@ -91,7 +96,7 @@ Every number can be traced to its inputs and recomputed:
 
 ### New user
 
-1. Install and open; the app opens in its own window.
+1. Install and start; the app opens in the browser.
 2. Paste a Tiingo key; prices download and are checked.
 3. Read the plan cards and compare them.
 4. Backtest a plan; read the results and the limits page.
@@ -137,7 +142,7 @@ mark them done.
 ## Architecture
 
 ```text
-App window (pywebview) Plans · Backtest · This month · Holdings · Settings
+Browser app            Plans · Backtest · This month · Holdings · Settings
       │
 Local server           one API; a thin CLI calls the same API
       │
@@ -176,5 +181,4 @@ Local storage          price cache · holdings · settings · saved runs
   final?
 - Default levels for the drawdown brake, its re-entry rule, the stop and the
   minimum trade.
-- Do testers want a weekly option?
-- Price, and how the first buyers pay.
+- Do users want a weekly option?

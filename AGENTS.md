@@ -5,7 +5,8 @@ works: [docs/ENGINE.md](docs/ENGINE.md). Studies: [docs/RESEARCH_LEDGER.md](docs
 
 ## Ownership and git
 
-- This is Elyorjon Mannonov's personal `elyorman/quant-platform` project, independent of any employer.
+- Glassbox Backtest (`elyorman/glassbox-backtest`) is Elyorjon Mannonov's personal project, MIT-licensed
+  and independent of any employer.
   No employer name, work account, work email, issue tracker or work tooling may appear in code, docs,
   commit metadata or configuration. No tickets or ticket-prefixed names are needed.
 - Commit with the personal identity configured for this repository, concise descriptive messages and

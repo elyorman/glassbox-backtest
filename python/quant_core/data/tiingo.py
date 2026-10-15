@@ -297,7 +297,7 @@ class TiingoClient:
         if self.budget is not None:
             self.budget.spend("Tiingo")
         raw = fetch(url, {"Accept": "application/json", "Authorization": "Token " + self.api_token,
-                          "User-Agent": "quant-platform-core"}, self.timeout, "Tiingo", ERRORS)
+                          "User-Agent": "glassbox-backtest"}, self.timeout, "Tiingo", ERRORS)
         retrieved_at = _now()
         if final(validate(raw, retrieved_at), retrieved_at):
             cache.store(request, raw, retrieved_at)

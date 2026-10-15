@@ -21,7 +21,7 @@ def _arrow():
         import pyarrow as pa
         import pyarrow.parquet as pq
     except ImportError:
-        raise ImportError("Parquet support requires optional pyarrow; install quant-platform-core[parquet]") from None
+        raise ImportError("Parquet support requires optional pyarrow; install glassbox-backtest[parquet]") from None
     return pa, pq
 
 

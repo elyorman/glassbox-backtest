@@ -1,4 +1,4 @@
-# Engine reference
+# Glassbox Backtest engine reference
 
 The technical reference for `python/quant_core`; where it and the code disagree, the page is the bug.
 Money is USD, quantities are shares, returns are fractions. Inputs are `Decimal`, integers or decimal
@@ -246,5 +246,5 @@ floats, so DSR values are rounded.
   settlement timing. Buys are whole shares and all-or-nothing: one the cash cannot cover waits a month.
 - Dated index membership (`universes/`) exists, but no qualified survivorship-free history; V1 trades
   ETFs only.
-- The historical V floor is not computed yet, no built-in has been registered or run on real data,
-  and Windows runs are not yet verified.
+- The historical V floor is not computed yet and no built-in has been registered (one exploratory
+  run is in the ledger); Windows runs are not yet verified.
